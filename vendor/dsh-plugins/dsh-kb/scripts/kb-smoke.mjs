@@ -9,7 +9,7 @@ import { Indexer } from '../core/indexer.js'
 import { KnowledgeBase, LEGACY_SECTION_DIRS } from '../core/kb.js'
 
 const args = process.argv.slice(2)
-const vault = args.find((a) => !a.startsWith('--')) || process.env.OBSIDIAN_VAULT_PATH || 'D:/obsidian-repo'
+const vault = args.find((a) => !a.startsWith('--')) || process.env.OBSIDIAN_VAULT_PATH
 const writeIndex = args.includes('--write-index')
 
 const fail = (msg) => {

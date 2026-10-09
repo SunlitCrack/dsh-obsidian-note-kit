@@ -5,7 +5,7 @@
 //   node scripts/host-smoke.mjs [vaultPath]
 import { strict as assert } from 'node:assert'
 
-const vault = process.argv[2] || 'D:/obsidian-repo'
+const vault = process.argv[2] || process.env.OBSIDIAN_VAULT_PATH
 process.env.OBSIDIAN_VAULT_PATH = vault
 
 const mod = await import('../lib/index.js')

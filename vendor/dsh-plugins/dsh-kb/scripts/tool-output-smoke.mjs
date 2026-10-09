@@ -35,7 +35,7 @@ const proj = 'proj'
 const repo = 'demorepo'
 
 if (REAL) {
-  vault = process.env.OBSIDIAN_VAULT_PATH || 'D:/obsidian-repo'
+  vault = process.env.OBSIDIAN_VAULT_PATH
   if (!existsSync(vault)) {
     console.error(`✗ 找不到真实 vault: ${vault}`)
     process.exit(1)

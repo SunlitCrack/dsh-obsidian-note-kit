@@ -80,7 +80,7 @@
    }
    ```
 
-   本机实测的形态是 `"dsh-kb": "link:D:\\dsh-plugins\\dsh-kb"`，profile 位于 `~/.dsh/profiles/<profile名>/`。
+   参考形态是 `"dsh-kb": "link:<你的插件目录>\\dsh-kb"`，profile 位于 `~/.dsh/profiles/<profile名>/`。
 
 3. 让插件依赖就位（`dsh-kb` 的运行期依赖极少，若报缺包，在其目录里装一次即可）
 4. **重启 DSH**
@@ -190,5 +190,7 @@ mkdir -p my-vault
 
 ## 许可与归属
 
-- `vendor/dsh-plugins/dsh-kb/` 归其原作者，随附原 `LICENSE`（MIT）；本仓库只做内置分发。
-- 其余 skill 与文档的许可由本仓库作者决定。
+本仓库采用 **MIT License**，见 [`LICENSE`](LICENSE)。
+
+- **本仓库原创内容**（三份 skill 与全部文档）：MIT，Copyright (c) 2026 lpp
+- **`vendor/dsh-plugins/dsh-kb/`**：归其原作者，随附其原 `LICENSE`（MIT）。本仓库只做内置分发，并对其中的本机路径做了脱敏——改动清单见 [`vendor/README.md`](vendor/README.md)

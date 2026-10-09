@@ -11,11 +11,11 @@
 
 | | |
 |---|---|
-| 本插件 | `D:\dsh-plugins\dsh-kb`（新插件，可独立卸载） |
-| 壳来源 | `D:\dsh-plugins\obsidian-workbench`（Bob-Bo1，MIT，**保持原样不动**） |
-| 服务层来源 | `D:\dsh-plugins\dsh-cardian`（MIT，**保持原样不动**） |
+| 本插件 | `<plugins-dir>\dsh-kb`（新插件，可独立卸载） |
+| 壳来源 | `<plugins-dir>\obsidian-workbench`（Bob-Bo1，MIT，**保持原样不动**） |
+| 服务层来源 | `<plugins-dir>\dsh-cardian`（MIT，**保持原样不动**） |
 | 构建 | `npm run build:client`（esbuild：`lib/client-source.js` → `lib/client.js`，CodeMirror 打进 bundle）<br>host 半 `lib/index.js` 是手写纯 ESM，**无需构建**，可直接 `import` 本包 `core/` |
-| 注入 | `dev_inject_plugin(D:\dsh-plugins\dsh-kb)`；卸载 `dev_uninject_plugin("dsh-kb")` |
+| 注入 | `dev_inject_plugin(<plugins-dir>\dsh-kb)`；卸载 `dev_uninject_plugin("dsh-kb")` |
 
 > ⚠️ `npm install` 必须带代理（本机 Clash `http://127.0.0.1:7897`），否则会静默卡死：
 > ```powershell
@@ -134,7 +134,7 @@
 2. **右下角入口**：侧边栏底部应有整行「图标 + 知识中心」按钮（不是纯图标）→ 点击打开三栏工作台。
 3. **左栏四段**：「文件 / 知识 / 洞察 / 代码」。点「知识」应看到 Inbox 卡片区 + 6 个项目（k8s / Obsidian-AI / 启智平台管理 / Excalidraw / Obsidian / omp），每个都能展开出自 `INDEX.md` 的 L1 行。
 4. **「洞察」页**：标签云 / **图谱**（SVG 力导向，点节点开笔记，显示孤立数）/ **缺口**（当前为空）/ 体检（0 错误 / 70 警告 / 0 提示）+「重建索引」按钮。
-5. **「代码」页**：真实 vault 里还没有 RepoWiki 页 → 应显示"扫描 / 同步本地仓库"表单（仓库绝对路径 + 仓库名 + 文件数）。想看效果就填 `D:\git-repository\inf-k8s` / `inf-k8s` / `40` 点「扫描仓库」，然后依赖图、页面清单、概览都会出来（会在 vault 里建 `inf-k8s/` 项目，可整目录删掉）。
+5. **「代码」页**：真实 vault 里还没有 RepoWiki 页 → 应显示"扫描 / 同步本地仓库"表单（仓库绝对路径 + 仓库名 + 文件数）。想看效果就填 `<本地仓库绝对路径>` / `<仓库名>` / `<文件数>` 点「扫描仓库」，然后依赖图、页面清单、概览都会出来（会在 vault 里建 `<仓库名>/` 项目，可整目录删掉）。
 6. **提示词**：让 agent 只说一句"我这条经验值得记下来吗"，它应该主动提 `kb_capture` / Inbox —— 说明提示词契约生效。
 7. **沉淀闭环 demo**：让 agent 跑 `kb_capture`（项目 `k8s`）→ 「知识」页 Inbox 出现待审卡片 → 点「归库」→ `k8s/INDEX.md` 里多一条。
 8. **回滚**：出问题就删 `~/.dsh/profiles/desktop/package.json` 里 `dependencies` 的 `dsh-kb` + `dsh.profile.bundles` 里的 `dsh-kb`（备份 `.bak-before-cardian-removal`），重启即可回到无插件状态。
@@ -262,7 +262,7 @@
 - 表现：`dev_plugin_status` 显示 `[active] xxx (dsh-kb) [injected] [disabled]`，而 **host 半根本没执行**。
   - **判据用哪个（2026-09-14 更正）**：**别**拿"`apply()` 里的 `console.log` 有没有进宿主日志"当判据 —— 插件的 `console.log` **不进** `%APPDATA%\DSH Desktop\logs\host\dsh-<date>.log`（只有走宿主 logger 的日志才进；cardian 那几条 `[cardian] vault 变更…` 就是宿主 logger）。
   - 可靠判据：**看 agent 的工具表** —— host 半跑过的话 `kb_index`/`kb_search`/`kb_read` 会出现在工具表里，直接调一次 `kb_index` 能返回数据就是最终实证；辅助判据是 `dev_plugin_status` 的 `[disabled]` 标记。
-- 因此 dsh-kb 改走**官方装配**：`dev_install_package(dir, profile='desktop')` → profile `package.json` 的 `dependencies: link:D:\dsh-plugins\dsh-kb` + `dsh.profile.bundles` 里都有 `dsh-kb`，junction 已建（`cordis.patch.yml` 保持干净，**不要**再加 insert，否则与 bundles 双装配）。
+- 因此 dsh-kb 改走**官方装配**：`dev_install_package(dir, profile='desktop')` → profile `package.json` 的 `dependencies: link:<plugins-dir>\dsh-kb` + `dsh.profile.bundles` 里都有 `dsh-kb`，junction 已建（`cordis.patch.yml` 保持干净，**不要**再加 insert，否则与 bundles 双装配）。
 - **需要重启一次 DSH Desktop** 才会真正装配（重启后由 bundles 列表加载，双路径一致）。touch patch 触发 `include.refresh` 在本机实测无效。
 - 结论：本机每个阶段的"在宿主内验收"都要重启一次；不依赖宿主的验证走下面两个冒烟脚本。
 - **补充实测（2026-09-14，dsh-kb 已装配到 bundles 之后）**：`dev_reload_package('dsh-kb')` 返回 `OK: 坏缓存兜底重载完成（无旧代回滚）`、fiber 前后都是 `[active]`，看起来成功，但**运行中的代码没有换**：紧接着调 `kb_index({})` 仍然报 P1 那个 `value is not lossless JSON`（该 bug 在磁盘代码里早已修掉，且现在有 `tool-output-smoke` 断言）。判据很硬：**重载后调一次带已知修复的工具，看它有没有体现修复**。所以：bundle 装配的插件，代码改动**只能靠重启**（`dev_reload_package` 对 `[injected]` 的超级模组有效，对本机 bundles 装配的插件无效）。
@@ -286,7 +286,7 @@
 ```
 Error: dsh-plugin-desktop: plugin tree failed to load:
   failed to apply loader entry dsh-kb (dsh-kb): cannot get property "tools" without inject
-    at register (D:/dsh-plugins/dsh-kb/lib/tools.js:28:12)
+    at register (<plugins-dir>/dsh-kb/lib/tools.js:28:12)
     at registerKbTools (…/lib/tools.js:64:3)
     at new apply (…/lib/index.js:558:3)
 ```
@@ -336,7 +336,7 @@ node scripts/tool-output-smoke.mjs --readonly   # 真实 vault：11 个只读工
 ```powershell
 npm test                             # 全量闸门：check(语法+构建) + 下面 5 个冒烟 + 真实 cordis 加载
 node scripts/kb-smoke.mjs            # core：全库索引 / L1 检索 / origin 分级 / L2 读取 / 路径越界
-node scripts/kb-smoke.mjs D:/obsidian-repo --write-index   # 额外真写 k8s/INDEX.md
+node scripts/kb-smoke.mjs <vault-path> --write-index   # 额外真写 <项目>/INDEX.md
 node scripts/host-smoke.mjs          # host：假 ctx 驱动 apply()，验证路由注册 + 工具注册 + 真实执行
 node scripts/p2-smoke.mjs            # P2 沉淀闭环（一次性临时 vault）
 node scripts/p3-smoke.mjs            # P3 RepoWiki（一次性临时 vault + fixture 仓库，含面板 6 条路由）

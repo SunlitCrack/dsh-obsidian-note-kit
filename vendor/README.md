@@ -9,26 +9,37 @@
 | 来源 | `dsh-kb` 插件 v0.1.0 |
 | 许可 | MIT，见其目录下的 `LICENSE` |
 | 为什么内置 | 它以本地 `link:` 方式装配（不是 npm 包），且是本方案"查重 / 检索 / 索引"能力的唯一提供者 |
-| 内置时的处理 | 排除了 `node_modules`（体积 16 MB → 1.6 MB）；`lib/` 下的 web 面板产物保持已构建状态，**无需重新构建** |
+| 内置时的处理 | ① 排除 `node_modules`；② 对本机路径做脱敏（见下） |
 
-### ⚠️ 副本里保留了原作者的默认路径
+`lib/` 下的 web 面板产物保持**已构建状态**，无需重新构建。
 
-`dsh-kb` 自己的 `README.md` 与 `scripts/*.mjs` 里带着**作者本机的默认路径**，例如：
+## 本副本相对上游的改动
 
-- `D:/obsidian-repo`（脚本里作为 vault 的 fallback 默认值）
-- `D:\dsh-plugins\...`（文档里的装配说明）
+### 1. 排除 `node_modules`
 
-这些是上游内容，**本副本未做改动**。你使用时按自己的库改，或用环境变量覆盖（如 `OBSIDIAN_VAULT_PATH`）——**不要照抄这些路径**。
+上游目录含 `node_modules`（约 14 MB）。本副本不纳入——需要时在其目录里装一次即可。
+
+### 2. 本机路径脱敏
+
+上游源码的文档与测试脚本里带着作者本机的绝对路径。这些不应随仓库分发，已全部换成占位符：
+
+| 文件 | 改动 |
+|---|---|
+| `README.md` | 7 处：`<plugins-dir>` 替换原插件目录；`<本地仓库绝对路径>` / `<仓库名>` / `<文件数>` 替换原仓库扫描示例；`<vault-path>` 替换原库路径 |
+| `scripts/host-smoke.mjs` | 去掉硬编码的 vault 默认值，改为 `process.argv[2] \|\| process.env.OBSIDIAN_VAULT_PATH` |
+| `scripts/kb-smoke.mjs` | 同上，删掉末尾的硬编码默认值 |
+| `scripts/tool-output-smoke.mjs` | 同上 |
+| `lib/client-source.js` | 表单 placeholder 的示例路径 → `D:\code\my-repo`（通用示例） |
+| `lib/client.js` | 同上（构建产物，手工同步以保证与源码一致） |
+
+> `lib/client.js` 由 `lib/client-source.js` 构建而来，两处都已改；重新构建会从已脱敏的源码生成，结果一致。
+
+**跑这些 smoke 脚本时请显式传库路径，或设 `OBSIDIAN_VAULT_PATH` 环境变量——不再有默认值。**
 
 ## 未纳入本目录的邻居插件
 
-`dsh-skills-mcp-manager`、`dshmarket` 等依赖**自带独立 git 仓库与发布渠道**，直接内置会把另一个项目的完整 git 历史混进本仓库。它们的获取方式见仓库根的 [`DEPENDENCIES.md`](../DEPENDENCIES.md)。
+`dsh-skills-mcp-manager`、`dshmarket` 等依赖**自带独立 git 仓库与发布渠道**。直接内置会把另一个项目的完整 git 历史混进本仓库，因此未纳入——获取方式见仓库根的 [`DEPENDENCIES.md`](../DEPENDENCIES.md)。
 
 ## 关于修改
 
-本目录是**上游副本**，除下列情况外不建议改动：
-
-- `node_modules` 的排除（已做）
-- 与本方案相关的适配（如有，必须记录在本文件，并注明改动了哪几行）
-
-改了就应在提交信息里写明原因，避免与上游漂移后无法合并。
+本目录是**上游副本**，除上述两类处理外不建议再改。若因本方案需要额外适配，必须记录在本文件的表格里并注明改了哪几行，避免与上游漂移后无法合并。

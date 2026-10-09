@@ -26542,7 +26542,7 @@ ${node.path}
               React.createElement("input", {
                 className: "_kb_wikiinput",
                 value: form.repoPath,
-                placeholder: "\u4ED3\u5E93\u7EDD\u5BF9\u8DEF\u5F84\uFF0C\u5982 D:\\git-repository\\inf-k8s",
+                placeholder: "\u4ED3\u5E93\u7EDD\u5BF9\u8DEF\u5F84\uFF0C\u5982 D:\\code\\my-repo",
                 onChange: (event) => setForm({ ...form, repoPath: event.target.value })
               }),
               React.createElement("input", {

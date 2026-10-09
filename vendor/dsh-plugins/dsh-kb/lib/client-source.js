@@ -1790,7 +1790,7 @@ window.__ModuleLoader__.load({
             React.createElement("input", {
               className: "_kb_wikiinput",
               value: form.repoPath,
-              placeholder: "仓库绝对路径，如 D:\\git-repository\\inf-k8s",
+              placeholder: "仓库绝对路径，如 D:\\code\\my-repo",
               onChange: (event) => setForm({ ...form, repoPath: event.target.value })
             }),
             React.createElement("input", {
