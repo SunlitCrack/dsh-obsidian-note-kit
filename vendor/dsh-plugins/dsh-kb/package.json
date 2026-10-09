@@ -1,0 +1,58 @@
+{
+  "name": "dsh-kb",
+  "version": "0.1.0",
+  "description": "DSH 本地知识库：全 vault 原地索引 + 项目级 L1/L2 检索 + 任务后自动沉淀（obsidian-workbench × dsh-cardian 合并）",
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "obsidian",
+    "knowledge-base",
+    "vault",
+    "index"
+  ],
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "scripts",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "scripts": {
+    "build:client": "node scripts/build-client.mjs",
+    "check": "node --check lib/index.js && node --check lib/tools.js && node --check lib/client-source.js && npm run build:client && node --check lib/client.js",
+    "test": "npm run check && node scripts/kb-smoke.mjs && node scripts/host-smoke.mjs && node scripts/p2-smoke.mjs && node scripts/p3-smoke.mjs && node scripts/p4-smoke.mjs && node scripts/p5-smoke.mjs && node scripts/tool-output-smoke.mjs && node scripts/cordis-load.mjs"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-sidebar",
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-model-selection",
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-locale"
+      ]
+    }
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@codemirror/commands": "^6.11.0",
+    "@codemirror/lang-markdown": "^6.5.2",
+    "@codemirror/language": "^6.12.4",
+    "@codemirror/state": "^6.7.1",
+    "@codemirror/view": "^6.43.9",
+    "esbuild": "^0.25.9"
+  }
+}
