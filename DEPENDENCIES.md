@@ -49,6 +49,12 @@
 
 > **插件 id 变更提醒**：Iconize 与 Supercharged Links 都改过 id。旧 id `obsidian-iconize`、`obsidian-supercharged-links` 已失效——若在 `community-plugins.json` 里看到它们，属历史残留，不影响功能。
 
+> **两个配置类的"写了不生效"陷阱**（都属于静默失效，不看意识不到）：
+> - **Iconize 的图标名必须落在它自带的图标集里**：写的是"包前缀 + PascalCase 名"（用内置 Lucide 时前缀就是那个包的前缀），**名字不存在只是不渲染**，不会报错。不确定就先在 Obsidian 内置图标表里核对再写。
+> - **Style Settings 的键名是 `<段 id>@@<设置 id>`**，而"段与设置"由主题/片段里的 `@settings` 注释块声明——**键名没在其中声明过也是静默失效**。想给某插件的生成物配色，读它生成文件末尾的 `@settings` 块就能拿到合法键名，不必非走面板点。
+>
+> 改这两个插件的 `data.json` 都遵循同一条顺序：**写盘 → 让 Obsidian 重载 → 回读确认**；宿主运行中改会被插件在下一次保存时覆盖。
+
 ## D. 本机工具链
 
 | 工具 | 用途 | 必需 |
