@@ -82,16 +82,14 @@
 
 ## G. 配套 skill（外部，可选）
 
-本方案的四份 skill 会引用一个**不在本仓库内**的外部 skill：
+本方案的四份 skill 引用了**一个不在本仓库内**的外部 skill，但它只是扩展参考，**不构成依赖**：
 
 | skill | 作用 | 获取方式 | 必需 |
 |---|---|---|---|
-| `obsidian-markdown` | Obsidian 专有语法规范（wikilink / callout / frontmatter / embed / properties） | [kepano/obsidian-skills](https://github.com/kepano/obsidian-skills)（Obsidian 官方维护） | 否 |
+| `obsidian-markdown` | Obsidian 扩展语法（数学公式 / 脚注 / 块引用 / properties 类型 / 完整 callout 类型表） | [kepano/obsidian-skills](https://github.com/kepano/obsidian-skills)（Obsidian 官方维护） | 否 |
 
-引用点两处：`technical-writing` 的「本文不管什么」表与「关联」节、`k8s-obsidian-notes` 的前置要求，都写着"Obsidian 语法参照 `obsidian-markdown`"。
+**为什么不是依赖**：日常要用的语法（wikilink / 附件嵌入 / callout / mermaid / 行内高亮）由本方案通用层自带——见 `k8s-obsidian-notes` 的「Obsidian 语法最小集」节。那份最小集是按"这类笔记实际用到哪些语法"取舍的，不是照抄语法手册；只有扩展语法（本类笔记从不使用的那几类）才需要外部 skill 或官方文档。
 
-**未装时的行为**：不算坏。`k8s-obsidian-notes` 适配层 §2 自带最小语法集（`[[文件名]]` 短链、`[text](url)` 外链、callout、mermaid 代码块），未装该 skill 时按它执行即可。
+**装与不装的行为一致**：装了可查扩展语法；不装则按通用层最小集执行，写出的笔记没有差别。因此**不要**在任何 `SKILL.md` 里写"本环境未装"之类的注记——装没装是环境事实，属于 `local-adaptation.md`；写进通用层既违反三层结构，也会让各处的 `SKILL.md` 与上游产生无谓差异。
 
-**因此不要在 `SKILL.md` 里写"本环境未装"之类的注记**——那是环境事实，属于适配层。写进通用层既违反三层结构，也会让各处的 `SKILL.md` 与上游产生无谓差异；"装没装、没有时怎么降级"应写在 `local-adaptation.md` 里。
-
-**安装位置**：按第 3 步的对照表装到你实际加载 skill 的那几处（用户级 + 项目级）。漏装不会报错——只是那两处引用落空，改走最小语法集降级。
+**安装位置**：若确实要装，按第 3 步的对照表装到你实际加载 skill 的那几处（用户级 + 项目级）。

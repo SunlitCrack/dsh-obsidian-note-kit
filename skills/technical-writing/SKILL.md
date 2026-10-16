@@ -14,7 +14,7 @@ description: 跨体裁的通用写作纪律，任何写文档的场景都适用�
 | 体裁骨架与字段口径——知识笔记 | `k8s-obsidian-notes` |
 | 体裁骨架——故障复盘 / 报错信号卡 | `writing-postmortems` |
 | 落点（哪个项目、哪个目录、文件名） | `obsidian-note-placement` |
-| Obsidian 语法（wikilink / callout / frontmatter） | `obsidian-markdown` |
+| Obsidian 语法（wikilink / callout / frontmatter） | `k8s-obsidian-notes` 的「Obsidian 语法最小集」节（本方案自带）；扩展语法参照可选的外部 skill `obsidian-markdown` |
 
 **与体裁 skill 的关系**：本文是写作纪律的**权威版本**。体裁 skill 里内联了同样规则，作用是兜底——防本文未被加载时规则丢失。**两者不一致时以本文为准**，并把差异回写到体裁 skill。
 
@@ -120,7 +120,7 @@ description: 跨体裁的通用写作纪律，任何写文档的场景都适用�
 - `k8s-obsidian-notes`：知识笔记的体裁骨架（章节结构、字段口径）与落库细则
 - `writing-postmortems`：故障复盘 / 报错信号卡的体裁骨架与规则
 - `obsidian-note-placement`：落点判定（项目、体裁、目录层级、查重、登记）
-- `obsidian-markdown`：Obsidian 语法（wikilink / callout / frontmatter）
+- `obsidian-markdown`（可选，外部 skill）：扩展 Obsidian 语法（数学公式 / 脚注 / 块引用 / properties 类型）；日常语法由 `k8s-obsidian-notes` 自带的最小集覆盖
 
 ---
 
