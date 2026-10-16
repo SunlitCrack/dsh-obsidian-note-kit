@@ -102,14 +102,14 @@ mkdir -p my-vault
 
 ### 第 3 步 · 放 skill 到位
 
-把 `skills/` 下三个目录整体拷进宿主 agent 的 skill 目录。常见位置：
+把 `skills/` 下四个目录整体拷进宿主 agent 的 skill 目录。常见位置：
 
 | 层级 | 路径 |
 |---|---|
 | 用户级 | `~/.dsh/skills/`、`~/.codex/skills/`、`~/.qoder/skills/` |
 | 项目级 | `<项目>/.dsh/skills/`、`<项目>/.claude/skills/`、`<项目>/.qoder/skills/`、`<项目>/.codex/skills/` |
 
-**三个必须一起装**——`writing-postmortems` 的语言标准指向 `k8s-obsidian-notes` 通用层 §4.2（已内联最小原则可降级，但完整替换表在那边）。
+**四个一起装**——`technical-writing` 是写作纪律的正本，`obsidian-note-placement`、`k8s-obsidian-notes`、`writing-postmortems` 的骨架与判定都指向它；只装体裁 skill 会退化成内联兜底副本，正本更新后副本可能滞后。
 
 > **多副本提醒**：如果同一台机器上有多个宿主，skill 会在多处存在，且各宿主解析顺序不同（项目级通常优先）。**指定一份为真源，改动一律从真源分发到各处**，否则会出现版本漂移。
 
@@ -125,7 +125,7 @@ mkdir -p my-vault
 
 ### 第 5 步 · 填 `local-adaptation.md`
 
-这三个文件本身就是模板（`technical-writing` 的适配层通常为空，不含环境值，可跳过）。逐项把占位符换成你的库事实：
+这些适配层文件本身就是模板（`technical-writing` 的适配层通常为空，不含环境值，可跳过）。逐项把占位符换成你的库事实：
 
 | 小节 | 填什么 |
 |---|---|
@@ -205,6 +205,8 @@ mkdir -p my-vault
 
 - **适配层完全缺失也能工作**：通用层自带降级描述——用空库沙盒实测过，纯靠通用层 + 库内自己的总表，六步流程全部走通。
 - **未覆盖**：故障复盘与报错信号卡的迁移路径没单独跑过演习；它们的落盘 / 登记逻辑与知识笔记同构。
+- **来源分级字段不写会被当成"本地已验证"**：按来源分级的索引工具对缺 `origin` 的笔记默认按 `local` 处理，外部资料与推理内容不显式标注就会混进默认检索结果。适配层已把该字段列为必填项。
+- **正式笔记直写优先于插件的沉淀契约**：宿主插件（如 `dsh-kb`）的提示词要求"先落 `Inbox/` 再 promote"，本方案仍直写目标目录；被拦截时走完该流程后立即归位，并补齐 `capture` 不带入的元数据（`summary` / `category` / `trigger_keywords`）。
 - **走 MCP 的写入通道在"任一侧重载"后会失效**：这类通道是 sessionful 的（客户端持 session id，服务端按 session 记状态），服务端插件重载或宿主重启会清掉 session、而客户端还握着旧 id，下一次调用报 `Session not found`——换参数重试无用。处理与预防见 `references/harness.md` §2「共同限制」。
 - **配置类改动都是"写盘 → 重载 → 回读"三步**：只写盘不重载等于没改；反过来先重载再写盘会被宿主的下一次保存盖掉。同上，细节见 `references/harness.md` §2。
 - `k8s-obsidian-notes` 的名字带 k8s，但它同样管平台功能类笔记。改名会牵动多处交叉引用，故保留原名，靠 `description` 说明覆盖面。
