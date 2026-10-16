@@ -18,7 +18,7 @@
 |---|---|---|
 | DSH / Qoder / Claude Code / Codex | 任一能加载 skill、能读写文件的 agent | 是 |
 
-> 三份 skill 的 `references/harness.md` 按宿主分别描述写入通道；换宿主时重写它即可。
+> 各 skill 的 `references/harness.md` 按宿主分别描述写入通道；换宿主时重写它即可（四份内容相同，同步改）。
 
 ## B. DSH 插件（以 DSH 为宿主时）
 
