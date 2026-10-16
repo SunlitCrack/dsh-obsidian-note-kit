@@ -148,6 +148,7 @@ mkdir -p my-vault
 
 | 依赖 | 什么时候需要 |
 |---|---|
+| `obsidian-markdown` skill（**外部 skill，不在本仓库**） | 想让 agent 按 Obsidian 专有语法（wikilink / callout / frontmatter / embed）写笔记。未装时不算坏：`k8s-obsidian-notes` 适配层 §2 给了最小语法集，按它执行即可 |
 | Obsidian + Iconize | 想让目录有图标（否则跳过整个图标配置） |
 | Obsidian 的 MCP 写入通道插件 | 想让 agent 通过插件 API 改 frontmatter 而不是直写文件 |
 | Git Bash / POSIX shell | 想直接跑通用层给的 bash 参考命令（否则用本机 shell 的等价写法） |

@@ -1,6 +1,6 @@
 # 依赖清单
 
-分六类。标「必需」的缺了方案无法完整工作；标「可选」的按目标环境取舍。**已内置的依赖**在下面单列并标出路径。
+分七类。标「必需」的缺了方案无法完整工作；标「可选」的按目标环境取舍。**已内置的依赖**在下面单列并标出路径。
 
 ## 已内置
 
@@ -79,3 +79,19 @@
 ## F. 外部素材库（只读，可选）
 
 知识笔记常从排障知识库、最佳实践库、官方文档里提炼机制。若你的环境里有这类只读素材库，在适配层的「素材源」一节记下路径；没有就不填，**通用层不依赖它**。
+
+## G. 配套 skill（外部，可选）
+
+本方案的四份 skill 会引用一个**不在本仓库内**的外部 skill：
+
+| skill | 作用 | 获取方式 | 必需 |
+|---|---|---|---|
+| `obsidian-markdown` | Obsidian 专有语法规范（wikilink / callout / frontmatter / embed / properties） | [kepano/obsidian-skills](https://github.com/kepano/obsidian-skills)（Obsidian 官方维护） | 否 |
+
+引用点两处：`technical-writing` 的「本文不管什么」表与「关联」节、`k8s-obsidian-notes` 的前置要求，都写着"Obsidian 语法参照 `obsidian-markdown`"。
+
+**未装时的行为**：不算坏。`k8s-obsidian-notes` 适配层 §2 自带最小语法集（`[[文件名]]` 短链、`[text](url)` 外链、callout、mermaid 代码块），未装该 skill 时按它执行即可。
+
+**因此不要在 `SKILL.md` 里写"本环境未装"之类的注记**——那是环境事实，属于适配层。写进通用层既违反三层结构，也会让各处的 `SKILL.md` 与上游产生无谓差异；"装没装、没有时怎么降级"应写在 `local-adaptation.md` 里。
+
+**安装位置**：按第 3 步的对照表装到你实际加载 skill 的那几处（用户级 + 项目级）。漏装不会报错——只是那两处引用落空，改走最小语法集降级。
