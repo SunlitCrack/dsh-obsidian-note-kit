@@ -34,7 +34,7 @@
 | `templates/适配层示例-*.md` | 适配层**填好之后**长什么样的脱敏示例（`local-adaptation` / `harness` 各一份） |
 | `vendor/dsh-plugins/dsh-kb/` | 必需依赖 `dsh-kb` 的内置副本（MIT，保留原 LICENSE） |
 
-`skills/*/references/` 下的两个文件**本身就是模板**，内含逐项填写指引。
+`skills/*/references/` 下的两个文件**本身就是模板**（含占位符与逐项填写指引）；`templates/适配层示例-*.md` 是它们**填好之后**的样子，用来对照颗粒度——**只读不拷**，别把示例当模板复制进 `references/`。
 
 ## 三层结构（为什么这样分）
 
