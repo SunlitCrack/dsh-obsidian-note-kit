@@ -67,3 +67,51 @@
 - 短链接（按文件名解析）移动后不受影响，前提是**文件名在全库唯一**（移动前确认目标位置没有同名文件）
 - 移动后同步改：`tags` 等元数据、手维护索引里登记的路径
 - 移动记录写进 `<操作记录目录>`，含"原路径 → 新路径"清单，便于回滚
+
+## 6. 来源分级 `origin` 的检出
+
+`origin` 缺失时按来源分级的索引工具通常按 `local` 处理（`dsh-kb` 的 `originOf()` 缺省即 local），而存量笔记大多没有这个字段——**光在骨架里写"必填"不够，得能检出漏填**。
+
+新笔记写完，回读时用文件工具核对 frontmatter 里有 `origin:` 键；给全库做普查用下面两条命令（等价，后者按 YAML 精确解析，不漏块列表与多行值）。
+
+PowerShell：
+
+```powershell
+$vault = '<vault 绝对路径>'
+Get-ChildItem $vault -Recurse -Filter *.md |
+  Where-Object { $_.FullName -notmatch '\\\.' -and $_.Name -notlike 'INDEX.md' } |
+  ForEach-Object {
+    $t = Get-Content $_.FullName -Raw
+    if ($t -match '^---' -and $t -notmatch '(?m)^origin:\s*\S') {
+      [pscustomobject]@{ 路径 = $_.FullName.Replace("$vault\", ''); 改动 = $_.LastWriteTime.ToString('yyyy-MM-dd') }
+    }
+  } | Sort-Object 改动 -Descending | Format-Table -AutoSize
+```
+
+Python + PyYAML：
+
+```bash
+python - <<'PY'
+import pathlib, yaml
+vault = pathlib.Path(r'<vault 绝对路径>')
+missing = []
+for p in vault.rglob('*.md'):
+    if any(part.startswith('.') for part in p.parts) or p.name.startswith('INDEX'):
+        continue
+    text = p.read_text(encoding='utf-8-sig', errors='replace')
+    if not text.startswith('---'):
+        continue
+    try:
+        fm = yaml.safe_load(text.split('---', 2)[1]) or {}
+    except Exception:
+        missing.append((str(p.relative_to(vault)), 'frontmatter 解析失败'))
+        continue
+    if not fm.get('origin'):
+        missing.append((str(p.relative_to(vault)), str(fm.get('updated') or '')))
+print(f'缺 origin：{len(missing)} 篇')
+for path, updated in missing[:50]:
+    print(' -', path, updated)
+PY
+```
+
+判读口径：约定只约束新笔记、存量不回填，输出里越早的条目优先级越低；要处理的是刚写的那几篇。装了本仓库内置的 `dsh-kb` 时，`kb_doctor` 会报一条**聚合**提示（缺 `origin` 的篇数 + 前若干路径，不逐篇刷屏）；上面两条命令用于按需普查与定位到具体文件。

@@ -883,8 +883,8 @@ export class KnowledgeBase {
 
   /**
    * Vault health check. Levels: error / warn / info.
-   * Checks: missing title · expired (`expires`) · broken wikilinks · duplicate
-   * titles · stale `INDEX.md` · pending Inbox items.
+   * Checks: missing title · missing `origin` (aggregated) · expired (`expires`) ·
+   * broken wikilinks · duplicate titles · stale `INDEX.md` · pending Inbox items.
    */
   async doctor({ project = null, limit = 200 } = {}) {
     await this.refresh()
@@ -908,10 +908,17 @@ export class KnowledgeBase {
     }
 
     const byTitle = new Map()
+    const missingOrigin = []
     for (const rel of rels) {
       const doc = this.indexer.docs.get(rel)
       const fm = doc.frontmatter ?? {}
       if (!fm.title) problems.push({ level: 'warn', path: rel, issue: '缺少 title' })
+
+      // `origin` 缺失时 originOf() 兜底成 local，外部内容会被当成本地已验证知识
+      // 召回。这里只做聚合提示、不逐篇刷屏；约定只约束新笔记，存量不回填。
+      if (fm.origin === undefined || fm.origin === null || String(fm.origin).trim() === '') {
+        missingOrigin.push(rel)
+      }
 
       const expires = Date.parse(String(fm.expires ?? ''))
       if (Number.isFinite(expires) && expires < Date.now()) {
@@ -926,6 +933,17 @@ export class KnowledgeBase {
       for (const target of extractWikilinks(note?.body ?? '')) {
         if (!resolves(target)) problems.push({ level: 'warn', path: rel, issue: `断链：[[${target}]]` })
       }
+    }
+
+    if (missingOrigin.length) {
+      const head = missingOrigin.slice(0, 10)
+      problems.push({
+        level: 'info',
+        path: `${missingOrigin.length} 篇笔记`,
+        issue: `缺 origin（缺省按 local 处理，外部内容会被当成本地已验证知识召回；约定只约束新笔记、存量不回填，优先补最近改动的）：${head.join('、')}${
+          missingOrigin.length > head.length ? ` 等 ${missingOrigin.length} 篇` : ''
+        }`,
+      })
     }
 
     for (const [key, list] of byTitle) {

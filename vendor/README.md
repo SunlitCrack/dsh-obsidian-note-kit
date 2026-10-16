@@ -36,6 +36,20 @@
 
 **跑这些 smoke 脚本时请显式传库路径，或设 `OBSIDIAN_VAULT_PATH` 环境变量——不再有默认值。**
 
+### 3. `kb_doctor` 增加 `origin` 覆盖提示（本方案的适配）
+
+本方案要求新笔记显式标注来源分级 `origin`。该字段缺失时 `originOf()` 会兜底成 `local`，外部资料与推理内容会被当成"本地已验证知识"召回。为让漏填可被检出，`core/kb.js` 的 `doctor()` 增加一条**聚合** info 提示（不逐篇刷屏）：
+
+| 位置 | 改动 |
+|---|---|
+| `doctor()` 文档注释（约 886 行） | 检查项清单加入 missing `origin` |
+| `doctor()` 逐篇循环内（约 917 行） | 收集 `fm.origin` 为空的笔记 |
+| `doctor()` 循环之后（约 938 行） | 报一条 info：缺 `origin` 的篇数 + 前 10 条路径 |
+
+合计 +20 −2 行。判读口径（只约束新笔记、存量不回填）见 `skills/obsidian-note-placement/references/local-adaptation.md` §6。
+
+> 该改动属于"因本方案需要额外适配"，合并上游时需保留。
+
 ## 未纳入本目录的邻居插件
 
 `dsh-skills-mcp-manager`、`dshmarket` 等依赖**自带独立 git 仓库与发布渠道**。直接内置会把另一个项目的完整 git 历史混进本仓库，因此未纳入——获取方式见仓库根的 [`DEPENDENCIES.md`](../DEPENDENCIES.md)。
