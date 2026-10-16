@@ -75,10 +75,12 @@
 | 阶段 | 工具 |
 |---|---|
 | P1 | `kb_index`（L0 索引）/ `kb_search`（L1 检索，带 origin + type 过滤）/ `kb_read`（L2 正文） |
-| P2 | `kb_capture`（沉淀）/ `kb_merge`（去重合并）/ `kb_inbox`（待审列表 + 归库） |
-| P3 | `kb_wiki_ingest` / `kb_wiki_overview` / `kb_wiki_graph` / `kb_wiki_sync` |
-| P4 | `kb_tagcloud` / `kb_backlinks` / `kb_doctor` / `kb_export` / `kb_import` / `kb_skill_export` |
+| P2 | `kb_capture`（沉淀）/ `kb_inbox`（待审列表 + 归库；去重合并是它的 `action:'merge'`，就地修订是 `revise`） |
+| P3 | `kb_wiki_ingest` / `kb_wiki_sync` / `kb_wiki_upsert` / `kb_wiki_overview` / `kb_wiki_graph` / `kb_wiki_list` / `kb_wiki_delete` |
+| P4 | `kb_tagcloud` / `kb_backlinks` / `kb_doctor` / `kb_export` / `kb_import` / `kb_skill_export` / `kb_feedback`（确认 / 纠正会调整 confidence） |
 | P5 | `kb_gap`（list/add/resolve 缺口清单）/ `kb_graph`（链接图谱）/ `kb_reindex`（索引自愈） |
+
+> 上表按 `lib/tools.js` 里 `register()` 的工具逐个核对（2026-10-16，共 **22 个**）。**没有 `kb_merge` 这个工具**——去重合并走 `kb_inbox({ action: 'merge', path, into })`；照抄旧表会让 agent 去调一个不存在的工具名。
 
 （不再做闪卡 / SM-2 —— 用户明确不要。）
 
