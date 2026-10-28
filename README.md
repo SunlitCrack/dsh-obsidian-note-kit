@@ -29,7 +29,7 @@
 |---|---|
 | `skills/technical-writing/` | **通用写作纪律**（跨体裁）：真实性规则 / 硬性规则 / 换词表 + 换句式表 / 内容完整性 / 规则怎么长。另三个 skill 的写作规则以它为准 |
 | `skills/obsidian-note-placement/` | **放哪**：三步判定 / 八条规则 / 查重定位 / 登记 / 存量巡检 / 自更新约定 |
-| `skills/k8s-obsidian-notes/` | 知识笔记**怎么写**：8 节骨架 / 字段口径 / 写作姿态 / 语言标准表 |
+| `skills/k8s-obsidian-notes/` | 知识笔记**怎么写**：按问题选择章节 / 证据等级继承 / 字段口径 / 摘要与正文分工 / 索引登记 |
 | `skills/writing-postmortems/` | 故障文档**怎么写**：完整复盘骨架 + 报错信号卡骨架 / 规则 / 维护约定 |
 | `templates/归类总表模板.md` | 笔记库根的规则表模板——各 skill 的判定依据 |
 | `templates/适配层示例-*.md` | 适配层**填好之后**长什么样的脱敏示例（`local-adaptation` / `harness` 各一份） |
