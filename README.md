@@ -110,6 +110,7 @@
    ```
 
    > 该实现的端点要 Obsidian 正开着、插件已启用才通；连不上先查这两点，不是配置错。
+   > 插件同时开了 HTTPS 端口 `27124`，用的是**自签证书**：直接指过去会得到 `✗ self-signed certificate`。要么用明文 `27123`（插件里 `enableInsecureServer` 打开时才有），要么给 Node 配 `NODE_EXTRA_CA_CERTS=<导出的证书>` 再走 `https://127.0.0.1:27124/mcp/`。
 
    把它的输出填进 `skills/*/references/harness.md` §1.2。§1.1 列出了必须覆盖的四个能力（新建 / 局部改 / 移动改名 / 并发保护），照着槽位挑工具，不要照抄别人的清单。
 
