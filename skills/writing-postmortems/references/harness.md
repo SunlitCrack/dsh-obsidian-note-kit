@@ -43,6 +43,8 @@ node scripts/probe-mcp-tools.mjs            # 打印本机 server 的全部工�
 node scripts/probe-mcp-tools.mjs --json     # 机器可读，便于比对
 ```
 
+脚本按 `mcp.json` 里该 server 的 `transport` 自动分支：`stdio` 起子进程、走行分隔 JSON-RPC；`streamable-http` 走 HTTP POST + SSE 并按 `mcp-session-id` 维持会话（Obsidian 的 Local REST API with MCP 插件属于后者）。
+
 把实测到的名字填回本机副本的 §1.2，或直接记在 `local-adaptation.md`。**通用层与本文件都不该出现某个实现专属的工具名。**
 
 ## 2. 共同限制

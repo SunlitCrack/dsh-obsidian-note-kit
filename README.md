@@ -33,7 +33,7 @@
 | `skills/writing-postmortems/` | 故障文档**怎么写**：完整复盘骨架 + 报错信号卡骨架 / 规则 / 维护约定 |
 | `templates/归类总表模板.md` | 笔记库根的规则表模板——各 skill 的判定依据 |
 | `templates/适配层示例-*.md` | 适配层**填好之后**长什么样的脱敏示例（`local-adaptation` / `harness` 各一份） |
-| `scripts/probe-mcp-tools.mjs` | 列出本机 MCP server 实际暴露的工具名与说明，用来填 `harness.md` 的能力表 |
+| `scripts/probe-mcp-tools.mjs` | 列出本机 MCP server 实际暴露的工具名与说明，用来填 `harness.md` 的能力表（`stdio` 与 `streamable-http` 两种传输都支持） |
 
 `skills/*/references/` 下的两个文件**本身就是模板**（含占位符与逐项填写指引）；`templates/适配层示例-*.md` 是它们**填好之后**的样子，用来对照颗粒度——**只读不拷**，别把示例当模板复制进 `references/`。
 
@@ -98,6 +98,8 @@
    ```bash
    node scripts/probe-mcp-tools.mjs
    ```
+
+   脚本按 `~/.dsh/mcp.json` 里该 server 的 `transport` 自动分支：`stdio` 起子进程走行分隔 JSON-RPC；`streamable-http` 走 HTTP POST + SSE（Obsidian 的 **Local REST API with MCP** 插件就是这条，实测 `serverInfo: obsidian-local-rest-api 1.0.0`、16 个 `vault_*` 工具）。用 `--server <名字>` 换 server、`--config <路径>` 换配置、`--json` 拿机器可读结果。
 
    把它的输出填进 `skills/*/references/harness.md` §1.2。§1.1 列出了必须覆盖的四个能力（新建 / 局部改 / 移动改名 / 并发保护），照着槽位挑工具，不要照抄别人的清单。
 

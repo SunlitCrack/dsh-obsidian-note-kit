@@ -9,7 +9,15 @@
 //   node scripts/probe-mcp-tools.mjs --server obsidian
 //   node scripts/probe-mcp-tools.mjs --config <path>
 //   node scripts/probe-mcp-tools.mjs --json               # 只输出 JSON，便于脚本消费
+//
+// 两种传输都支持：
+//   - stdio：子进程 + 行分隔 JSON-RPC（seekstone 这类命令行 server）
+//   - streamable-http：HTTP POST + SSE 响应，按 Mcp-Session-Id 维持会话
+//     （Obsidian Local REST API 插件自带的 MCP 走这条，实测
+//      serverInfo obsidian-local-rest-api 1.0.0 / 16 个 vault_* 工具）
 import { spawn } from 'node:child_process'
+import { request as httpRequest } from 'node:http'
+import { request as httpsRequest } from 'node:https'
 import { existsSync, readFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -29,6 +37,29 @@ const die = (message) => {
   process.exit(1)
 }
 
+const printReport = (server, info, listed) => {
+  const tools = (listed?.tools ?? []).map((tool) => ({
+    name: tool.name,
+    description: String(tool.description ?? '').replace(/\s+/g, ' ').slice(0, 120),
+  }))
+  if (asJson) {
+    console.log(JSON.stringify({
+      server: server.name,
+      transport: server.transport ?? 'stdio',
+      serverVersion: info?.serverInfo?.version ?? null,
+      serverInfo: info?.serverInfo ?? null,
+      tools,
+    }, null, 2))
+    return
+  }
+  console.log(`server: ${server.name}${info?.serverInfo?.version ? ` ${info.serverInfo.version}` : ''} (${server.transport ?? 'stdio'})`)
+  console.log(`tools: ${tools.length}`)
+  console.log('')
+  for (const tool of tools) console.log(`- ${tool.name}${tool.description ? ` — ${tool.description}` : ''}`)
+  console.log('')
+  console.log('把上面与写入相关的那几个名字填进 skills/*/references/harness.md 的能力表。')
+}
+
 if (!existsSync(configPath)) die(`找不到 MCP 配置：${configPath}（用 --config 指定）`)
 let config
 try {
@@ -41,8 +72,87 @@ const server =
   servers.find((item) => item?.name === wantServer && item?.enabled !== false) ??
   servers.find((item) => item?.enabled !== false)
 if (!server) die(`配置里没有启用的 MCP server（找过「${wantServer}」）`)
+
+// —— streamable-http 分支：先于 stdio 处理，不需要子进程 ——
+// 用 node:http/https 的 agent:false（不复用连接），拿到的 socket 随响应关闭，
+// 因此结尾可以直接 process.exit；用 fetch(undici) 会在 Windows 上撞
+// UV_HANDLE_CLOSING 断言。
+if (server.transport === 'streamable-http') {
+  if (!server.url) die(`server「${server.name}」没有 url`)
+  const url = new URL(server.url)
+  const pick = url.protocol === 'https:' ? httpsRequest : httpRequest
+  const state = { sessionId: null }
+  const baseHeaders = {
+    'content-type': 'application/json',
+    accept: 'application/json, text/event-stream',
+    ...(server.headers ?? {}),
+  }
+  let nextId = 1
+
+  const post = (body) =>
+    new Promise((resolve, reject) => {
+      const payload = Buffer.from(JSON.stringify(body), 'utf8')
+      const headers = {
+        ...baseHeaders,
+        'content-length': String(payload.length),
+        ...(state.sessionId ? { 'mcp-session-id': state.sessionId } : {}),
+      }
+      const req = pick(url, { method: 'POST', headers, agent: false }, (res) => {
+        const sid = res.headers['mcp-session-id']
+        if (sid) state.sessionId = Array.isArray(sid) ? sid[0] : sid
+        const chunks = []
+        res.on('data', (chunk) => chunks.push(chunk))
+        res.on('end', () => {
+          const text = Buffer.concat(chunks).toString('utf8')
+          if (res.statusCode && res.statusCode >= 400) {
+            reject(new Error(`HTTP ${res.statusCode} ${res.statusMessage ?? ''}${text ? ` — ${text.slice(0, 300)}` : ''}`))
+            return
+          }
+          resolve({ text, contentType: String(res.headers['content-type'] ?? '') })
+        })
+      })
+      req.setTimeout(timeoutMs, () => req.destroy(new Error(`等 MCP 响应超时（${timeoutMs}ms）`)))
+      req.on('error', reject)
+      req.end(payload)
+    })
+
+  const rpc = async (method, params, isNotification = false) => {
+    const body = { jsonrpc: '2.0', method }
+    if (!isNotification) body.id = nextId++
+    if (params) body.params = params
+    const { text, contentType } = await post(body)
+    if (isNotification) return null
+    const messages = contentType.includes('text/event-stream')
+      ? text.split(/\r?\n/).filter((line) => line.startsWith('data:')).map((line) => line.slice(5).trim()).filter(Boolean).map((line) => JSON.parse(line))
+      : [JSON.parse(text)]
+    for (const message of messages) {
+      if (message.id === undefined) continue
+      if (message.error) throw new Error(message.error.message ?? JSON.stringify(message.error))
+      if (message.result !== undefined) return message.result
+    }
+    throw new Error('响应里没有匹配的 result')
+  }
+
+  const timer = setTimeout(() => die(`等 MCP 响应超时（${timeoutMs}ms）`), timeoutMs)
+  try {
+    const info = await rpc('initialize', {
+      protocolVersion: '2024-11-05',
+      capabilities: {},
+      clientInfo: { name: 'probe-mcp-tools', version: '1.0.0' },
+    })
+    await rpc('notifications/initialized', null, true)
+    const listed = await rpc('tools/list', {})
+    clearTimeout(timer)
+    printReport(server, info, listed)
+    process.exit(0)
+  } catch (err) {
+    clearTimeout(timer)
+    die(err.message)
+  }
+}
+
 if (server.transport && server.transport !== 'stdio') {
-  die(`只支持 stdio 传输，当前是「${server.transport}」`)
+  die(`只支持 stdio 与 streamable-http，当前是「${server.transport}」`)
 }
 if (!server.command) die(`server「${server.name}」没有 command`)
 
@@ -121,25 +231,7 @@ try {
   })
   send({ jsonrpc: '2.0', method: 'notifications/initialized' })
   const listed = await request('tools/list', {})
-  const tools = (listed?.tools ?? []).map((tool) => ({
-    name: tool.name,
-    description: String(tool.description ?? '').replace(/\s+/g, ' ').slice(0, 120),
-  }))
-
-  if (asJson) {
-    console.log(JSON.stringify({
-      server: server.name,
-      serverVersion: info?.serverInfo?.version ?? null,
-      tools,
-    }, null, 2))
-  } else {
-    console.log(`server: ${server.name}${info?.serverInfo?.version ? ` ${info.serverInfo.version}` : ''}`)
-    console.log(`tools: ${tools.length}`)
-    console.log('')
-    for (const tool of tools) console.log(`- ${tool.name}${tool.description ? ` — ${tool.description}` : ''}`)
-    console.log('')
-    console.log('把上面与写入相关的那几个名字填进 skills/*/references/harness.md 的能力表。')
-  }
+  printReport(server, info, listed)
   finish(0)
 } catch (err) {
   die(`${err.message}\nserver stderr 末段：\n${stderrTail || '(空)'}`)
