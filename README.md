@@ -101,6 +101,16 @@
 
    脚本按 `~/.dsh/mcp.json` 里该 server 的 `transport` 自动分支：`stdio` 起子进程走行分隔 JSON-RPC；`streamable-http` 走 HTTP POST + SSE（Obsidian 的 **Local REST API with MCP** 插件就是这条，实测 `serverInfo: obsidian-local-rest-api 1.0.0`、16 个 `vault_*` 工具）。用 `--server <名字>` 换 server、`--config <路径>` 换配置、`--json` 拿机器可读结果。
 
+   配置里没有这条 server 时，可用 `--url` 直接指定端点（此时不读 `mcp.json`）：
+
+   ```bash
+   node scripts/probe-mcp-tools.mjs \
+     --url http://127.0.0.1:27123/mcp/ \
+     --header "Authorization: Bearer <Local REST API apiKey>"
+   ```
+
+   > 该实现的端点要 Obsidian 正开着、插件已启用才通；连不上先查这两点，不是配置错。
+
    把它的输出填进 `skills/*/references/harness.md` §1.2。§1.1 列出了必须覆盖的四个能力（新建 / 局部改 / 移动改名 / 并发保护），照着槽位挑工具，不要照抄别人的清单。
 
 > `lib/client.js` 是已构建好的只读知识面板产物。只有改了 `lib/client-source.js` 才需要跑 `npm run build:client`。笔记内容修改走 Obsidian MCP，不经面板直写。

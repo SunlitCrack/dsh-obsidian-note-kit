@@ -27,14 +27,36 @@ const argOf = (name, fallback = null) => {
   const i = argv.indexOf(name)
   return i >= 0 && argv[i + 1] && !argv[i + 1].startsWith('--') ? argv[i + 1] : fallback
 }
+const argsOf = (name) => {
+  const out = []
+  for (let i = 0; i < argv.length; i += 1) {
+    if (argv[i] === name && argv[i + 1] && !argv[i + 1].startsWith('--')) out.push(argv[i + 1])
+  }
+  return out
+}
 const asJson = argv.includes('--json')
 const configPath = argOf('--config', path.join(os.homedir(), '.dsh', 'mcp.json'))
 const wantServer = argOf('--server', 'obsidian')
 const timeoutMs = Number(argOf('--timeout', '20000')) || 20000
+// 直接指定端点：此时不读 mcp.json。存在的理由是很多机器上 mcp.json 里压根没有
+// 那条 HTTP server（或写的是别的实现），照配置文件探测会连错对象还报成功。
+const overrideUrl = argOf('--url', null)
+const overrideHeaders = argsOf('--header')
 
 const die = (message) => {
   console.error(`✗ ${message}`)
   process.exit(1)
+}
+
+/** 解析 `Name: value` 形式的 header 参数。 */
+const parseHeaders = (list) => {
+  const out = {}
+  for (const raw of list ?? []) {
+    const at = raw.indexOf(':')
+    if (at <= 0) die(`--header 需要 "Name: value" 形式，收到「${raw}」`)
+    out[raw.slice(0, at).trim()] = raw.slice(at + 1).trim()
+  }
+  return out
 }
 
 const printReport = (server, info, listed) => {
@@ -60,18 +82,32 @@ const printReport = (server, info, listed) => {
   console.log('把上面与写入相关的那几个名字填进 skills/*/references/harness.md 的能力表。')
 }
 
-if (!existsSync(configPath)) die(`找不到 MCP 配置：${configPath}（用 --config 指定）`)
-let config
-try {
-  config = JSON.parse(readFileSync(configPath, 'utf8'))
-} catch (err) {
-  die(`MCP 配置不是合法 JSON：${err.message}`)
+// `--url` 优先：显式端点不依赖 mcp.json，避免「连到配置里另一台、却报成功」。
+let server
+if (overrideUrl) {
+  server = {
+    name: overrideUrl,
+    transport: 'streamable-http',
+    url: overrideUrl,
+    headers: parseHeaders(overrideHeaders),
+  }
+} else {
+  if (!existsSync(configPath)) die(`找不到 MCP 配置：${configPath}（用 --config 或 --url 指定）`)
+  let config
+  try {
+    config = JSON.parse(readFileSync(configPath, 'utf8'))
+  } catch (err) {
+    die(`MCP 配置不是合法 JSON：${err.message}`)
+  }
+  const servers = Array.isArray(config?.servers) ? config.servers : []
+  server =
+    servers.find((item) => item?.name === wantServer && item?.enabled !== false) ??
+    servers.find((item) => item?.enabled !== false)
+  if (!server) die(`配置里没有启用的 MCP server（找过「${wantServer}」）`)
+  // 命令行 header 补充配置里的 header（同名以命令行为准）。
+  const extra = parseHeaders(overrideHeaders)
+  if (Object.keys(extra).length) server = { ...server, headers: { ...(server.headers ?? {}), ...extra } }
 }
-const servers = Array.isArray(config?.servers) ? config.servers : []
-const server =
-  servers.find((item) => item?.name === wantServer && item?.enabled !== false) ??
-  servers.find((item) => item?.enabled !== false)
-if (!server) die(`配置里没有启用的 MCP server（找过「${wantServer}」）`)
 
 // —— streamable-http 分支：先于 stdio 处理，不需要子进程 ——
 // 用 node:http/https 的 agent:false（不复用连接），拿到的 socket 随响应关闭，
