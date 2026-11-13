@@ -2,7 +2,7 @@
 
 一套可开箱部署的笔记工作流：让 AI agent 按规矩往 Obsidian 笔记库里写东西——**放哪**（归类）、**怎么写**（知识笔记 / 故障复盘），并且做到**规则只放一处、环境事实只放一处**。
 
-含四份 skill、库内规则表模板、必需依赖插件 `dsh-kb` 的内置副本，以及从零开始的部署步骤。
+含四份 skill、库内规则表模板，以及从零开始的部署步骤。依赖的 `dsh-kb` 插件独立发布，见 [SunlitCrack/dsh-kb](https://github.com/SunlitCrack/dsh-kb)。
 
 ---
 
@@ -33,7 +33,6 @@
 | `skills/writing-postmortems/` | 故障文档**怎么写**：完整复盘骨架 + 报错信号卡骨架 / 规则 / 维护约定 |
 | `templates/归类总表模板.md` | 笔记库根的规则表模板——各 skill 的判定依据 |
 | `templates/适配层示例-*.md` | 适配层**填好之后**长什么样的脱敏示例（`local-adaptation` / `harness` 各一份） |
-| `vendor/dsh-plugins/dsh-kb/` | 必需依赖 `dsh-kb` 的内置副本（MIT，保留原 LICENSE） |
 
 `skills/*/references/` 下的两个文件**本身就是模板**（含占位符与逐项填写指引）；`templates/适配层示例-*.md` 是它们**填好之后**的样子，用来对照颗粒度——**只读不拷**，别把示例当模板复制进 `references/`。
 
@@ -58,7 +57,7 @@
 |---|---|---|
 | 一个能加载 skill 的宿主 agent | DSH / Qoder / Claude Code / Codex 任一 | 是 |
 | 一个 markdown 笔记库 | Obsidian vault 或任意 md 目录树 | 是 |
-| 一种检索 / 查重手段 | `dsh-kb`（本仓库内置）或 rg / grep / 库自带检索 | 是 |
+| 一种检索 / 查重手段 | `dsh-kb`（独立仓库 [SunlitCrack/dsh-kb](https://github.com/SunlitCrack/dsh-kb)）或 rg / grep / 库自带检索 | 是 |
 
 **不用 Obsidian 也可以**：方案只要求"md 笔记库 + 能查重检索"。此时跳过所有图标相关配置，适配层里对应小节整节删掉即可——通用层不会因此失效。
 
@@ -66,7 +65,14 @@
 
 `dsh-kb` 提供知识发现工具：`kb_find`、`kb_read`、`kb_doctor` 与结构化 `kb_gap`。它负责中文检索、来源分级和只读体检；笔记正文的创建、修订、移动和撤销统一交由 Obsidian MCP。
 
-1. 把 `vendor/dsh-plugins/dsh-kb/` 拷到你放插件源码的位置，例如 `<你的插件目录>/dsh-kb/`
+插件源码独立发布在 [SunlitCrack/dsh-kb](https://github.com/SunlitCrack/dsh-kb)，本仓库不再内置副本。
+
+1. 克隆插件仓库到你放插件源码的位置：
+
+   ```bash
+   git clone https://github.com/SunlitCrack/dsh-kb.git <你的插件目录>/dsh-kb
+   ```
+
 2. 在 DSH profile 的 `package.json` 里把它加成依赖，并列入 bundle 列表：
 
    ```json
@@ -218,4 +224,4 @@ mkdir -p my-vault
 本仓库采用 **MIT License**，见 [`LICENSE`](LICENSE)。
 
 - **本仓库原创内容**（四份 skill 与全部文档）：MIT，Copyright (c) 2026 lpp
-- **`vendor/dsh-plugins/dsh-kb/`**：归其原作者，随附其原 `LICENSE`（MIT）。本仓库只做内置分发，并对其中的本机路径做了脱敏——改动清单见 [`vendor/README.md`](vendor/README.md)
+- **`dsh-kb` 插件**：独立发布在 [SunlitCrack/dsh-kb](https://github.com/SunlitCrack/dsh-kb)，MIT。本仓库不内置其源码，只依赖它的 `kb_*` 工具接口。
