@@ -243,10 +243,6 @@ window.__ModuleLoader__.load({
       "._kb_tag{border:1px solid var(--dsw-alias-border-l2);border-radius:999px;background:transparent;color:var(--dsw-alias-label-secondary);font-size:11px;line-height:18px;padding:0 8px;cursor:pointer}",
       "._kb_tag:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}",
       "._kb_tag[data-active=true]{background:color-mix(in srgb,#7c65d7 16%,transparent);color:#7c65d7;border-color:color-mix(in srgb,#7c65d7 35%,transparent)}",
-      "._kb_wikiform{display:flex;flex-direction:column;gap:4px;padding:2px 6px 0}",
-      "._kb_wikiinput{box-sizing:border-box;width:100%;border:1px solid var(--dsw-alias-border-l2);border-radius:7px;background:transparent;color:var(--dsw-alias-label-primary);font:11px var(--ds-font-family,Inter,system-ui,sans-serif);padding:4px 7px}",
-      "._kb_wikiinput::placeholder{color:var(--dsw-alias-label-tertiary)}",
-      "._kb_wikibody{max-height:220px;overflow:auto;margin:2px 6px 0;padding:8px;border-radius:8px;background:color-mix(in srgb,var(--dsw-alias-label-primary) 4%,transparent);color:var(--dsw-alias-label-secondary);font:11px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;word-break:break-word}",
       // P5 图谱 / 缺口
       "._kb_graph{display:block;width:100%;height:auto;margin-top:2px;border-radius:8px;background:color-mix(in srgb,var(--dsw-alias-label-primary) 3%,transparent);cursor:grab}",
       "._kb_graphedge{stroke:var(--dsw-alias-border-l2);stroke-width:1}",
@@ -562,6 +558,8 @@ window.__ModuleLoader__.load({
               history(),
               keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
               EditorView.lineWrapping,
+              EditorState.readOnly.of(true),
+              EditorView.editable.of(false),
               livePreviewPlugin,
               updateListener,
               EditorView.domEventHandlers({ focus: ensureTitleLine }),
@@ -1219,41 +1217,6 @@ window.__ModuleLoader__.load({
         if (!data) load(null);
       }, [data, load]);
 
-      // P2 待审区：capture 落进来的东西先在这里排队，人工决定 归库/合并/丢弃。
-      const [inbox, setInbox] = useState(null);
-      const [inboxBusy, setInboxBusy] = useState(false);
-
-      const loadInbox = useCallback(async () => {
-        try {
-          setInbox(await requestJson(`${API}/knowledge/inbox`));
-        } catch (e) {
-          setError(e.message);
-        }
-      }, []);
-
-      useEffect(() => {
-        if (!inbox) loadInbox();
-      }, [inbox, loadInbox]);
-
-      // 面板上的点击本身就是人的显式同意，所以这里不走 approval 弹窗（工具调用才走）。
-      const inboxAction = useCallback(async (action, item, extra = {}) => {
-        setInboxBusy(true);
-        setError("");
-        try {
-          await requestJson(`${API}/knowledge/inbox`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(Object.assign({ action, path: item.path }, extra))
-          });
-          await loadInbox();
-          await load(project);
-        } catch (e) {
-          setError(e.message);
-        } finally {
-          setInboxBusy(false);
-        }
-      }, [project, load, loadInbox]);
-
       // overrideType：type chip 点击时用它传新值，避免 setState 尚未生效导致用旧过滤重搜。
       const search = useCallback(async (event, overrideType) => {
         if (event) event.preventDefault();
@@ -1297,34 +1260,6 @@ window.__ModuleLoader__.load({
         React.createElement("div", { className: "_kb_kbhead" },
           React.createElement("span", null, project ? `项目：${project}` : `全部项目（${data?.vault?.projectCount ?? 0}）`),
           project && React.createElement("button", { type: "button", onClick: () => { setResults(null); load(null); } }, "← 全部")),
-        inbox && inbox.count > 0 && React.createElement("div", { className: "_kb_inbox" },
-          React.createElement("div", { className: "_kb_kbhead" },
-            React.createElement("span", null, `待审 ${inbox.count} 条`),
-            React.createElement("button", { type: "button", disabled: inboxBusy, onClick: () => loadInbox() }, "刷新")),
-          inbox.items.map((item) => React.createElement("div", { key: item.path, className: "_kb_inboxitem" },
-            React.createElement("button", {
-              type: "button",
-              className: "_kb_kbrow",
-              onClick: () => onOpen({ path: item.path, name: item.title }),
-              title: item.path
-            },
-              React.createElement("span", { className: "_kb_kbrowtitle" }, item.title, badge(item.origin)),
-              React.createElement("span", { className: "_kb_kbrowmeta" },
-                [
-                  item.confidence != null ? `conf ${item.confidence}` : null,
-                  item.captured ? String(item.captured).slice(0, 10) : null,
-                  (item.suggest || []).length ? `候选 ${item.suggest.length}` : "无候选"
-                ].filter(Boolean).join(" · ")),
-              item.summary && React.createElement("span", { className: "_kb_kbsnippet" }, item.summary)),
-            React.createElement("div", { className: "_kb_inboxactions" },
-              React.createElement("button", { type: "button", disabled: inboxBusy, onClick: () => inboxAction("promote", item), title: "归入正式目录（自动，刷新 INDEX.md）" }, "归库"),
-              React.createElement("button", {
-                type: "button",
-                disabled: inboxBusy || !(item.suggest || []).length,
-                onClick: () => inboxAction("merge", item, { into: item.suggest[0] }),
-                title: (item.suggest || [])[0] ? `合并进 ${item.suggest[0]}` : "没有合并候选"
-              }, "合并"),
-              React.createElement("button", { type: "button", "data-danger": true, disabled: inboxBusy, onClick: () => inboxAction("drop", item, { reason: "panel" }), title: "丢弃到 Inbox/.dropped（可恢复）" }, "丢弃"))))),
         !project && (data?.projects || []).map((p) => React.createElement("button", {
           key: p.name,
           type: "button",
@@ -1351,8 +1286,7 @@ window.__ModuleLoader__.load({
             ["", "全部"],
             ["note", "普通笔记"],
             ["card", "card"],
-            ["memory", "memory"],
-            ["wiki", "wiki"]
+            ["memory", "memory"]
           ].map(([value, label]) => React.createElement("button", {
             key: value || "all",
             type: "button",
@@ -1554,25 +1488,6 @@ window.__ModuleLoader__.load({
         };
       }, [notePath]);
 
-      const rebuildIndexes = useCallback(async () => {
-        setBusy(true);
-        setError("");
-        try {
-          const out = await requestJson(`${API}/knowledge/reindex`, {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ fixIndexes: true })
-          });
-          setNotice(`索引已重建：${out.notes} 篇，刷新 ${out.fixed.length} 个项目索引`);
-          setGaps(await requestJson(`${API}/knowledge/gaps`));
-          setDoctor(await requestJson(`${API}/knowledge/doctor`));
-        } catch (e) {
-          setError(e.message);
-        } finally {
-          setBusy(false);
-        }
-      }, []);
-
       const levelLabel = { error: "错误", warn: "警告", info: "提示" };
       const linkRows = links
         ? [
@@ -1628,13 +1543,6 @@ window.__ModuleLoader__.load({
         doctor && React.createElement("div", { className: "_kb_insightbox" },
           React.createElement("div", { className: "_kb_sectionlabel" },
             `体检 · 错误 ${doctor.errors} / 警告 ${doctor.warns} / 提示 ${doctor.infos}`),
-          React.createElement("div", { className: "_kb_inboxactions" },
-            React.createElement("button", {
-              type: "button",
-              disabled: busy,
-              title: "强制全量重建索引，并重写落后/缺失的项目 INDEX.md（只动派生文件）",
-              onClick: () => rebuildIndexes()
-            }, "重建索引")),
           doctor.problems.length === 0
             ? React.createElement("div", { className: "_kb_hint" }, "没有问题，库很干净。")
             : doctor.problems.slice(0, 40).map((p, i) => React.createElement("button", {
@@ -1660,207 +1568,6 @@ window.__ModuleLoader__.load({
               },
                 React.createElement("span", { className: "_kb_kbrowtitle" }, `${row.kind} ${row.title || row.path}`),
                 React.createElement("span", { className: "_kb_kbrowmeta" }, row.relation ? `${row.relation} · ${row.path}` : row.path)))));
-    }
-
-    // dsh-kb: 「代码」面板 —— RepoWiki（扫仓库 / 同步 / 概览 / 依赖图 / 页面清单）。
-    // 「AI 凝练」不在这里：它由 agent 读骨架后调 `kb_wiki_upsert` 回填（面板只显示
-    // 每页的 analysisLevel，告诉你哪些页还是骨架）。
-    function WikiPanel({ onOpen }) {
-      const [repos, setRepos] = useState([]);
-      const [repo, setRepo] = useState("");
-      const [entries, setEntries] = useState([]);
-      const [graph, setGraph] = useState(null);
-      const [overview, setOverview] = useState(null);
-      const [form, setForm] = useState({ repoPath: "", repoName: "", maxFiles: "40" });
-      const [busy, setBusy] = useState("");
-      const [error, setError] = useState("");
-      const [notice, setNotice] = useState("");
-
-      const loadRepo = useCallback(async (name) => {
-        if (!name) {
-          setEntries([]);
-          setGraph(null);
-          setOverview(null);
-          return;
-        }
-        const query = encodeURIComponent(name);
-        const [list, g, o] = await Promise.all([
-          requestJson(`${API}/wiki/list?repo=${query}`),
-          requestJson(`${API}/wiki/graph?repo=${query}`).catch(() => null),
-          requestJson(`${API}/wiki/overview?repo=${query}`).catch(() => null)
-        ]);
-        setEntries(list.entries || []);
-        setGraph(g);
-        setOverview(o);
-      }, []);
-
-      const refresh = useCallback(async (prefer) => {
-        setBusy("读取");
-        setError("");
-        try {
-          const payload = await requestJson(`${API}/wiki/repos`);
-          const list = payload.repos || [];
-          setRepos(list);
-          const next = prefer && list.includes(prefer) ? prefer : repo && list.includes(repo) ? repo : list[0] || "";
-          setRepo(next);
-          await loadRepo(next);
-        } catch (e) {
-          setError(e.message);
-        } finally {
-          setBusy("");
-        }
-      }, [loadRepo, repo]);
-
-      useEffect(() => {
-        refresh("");
-        // 只在首次挂载时读一次；之后的刷新都由按钮触发。
-      }, []);
-
-      const post = useCallback(async (endpoint, payload, label) => {
-        setBusy(label);
-        setError("");
-        setNotice("");
-        try {
-          const out = await requestJson(`${API}${endpoint}`, {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify(payload)
-          });
-          if (out.added) {
-            setNotice(`${label}完成：新增 ${out.added.length} / 变更 ${out.changed?.length ?? 0} / 保留 ${out.preserved?.length ?? 0} / 剪除 ${out.pruned?.length ?? 0}${out.pruneSkipped ? `（${out.pruneSkipped}）` : ""}`);
-          } else if (typeof out.count === "number") {
-            setNotice(`${label}完成：写入 ${out.count} 页 / 跳过 ${out.skipped ?? 0} 页已存在${out.index ? "；INDEX.md 已刷新" : ""}`);
-          } else {
-            setNotice(`${label}完成`);
-          }
-          await refresh(out.repo || preferName(payload));
-        } catch (e) {
-          setError(e.message);
-        } finally {
-          setBusy("");
-        }
-      }, [refresh]);
-
-      function preferName(payload) {
-        const raw = String(payload?.repoName || payload?.repoPath || "").replace(/[/\\]+$/, "");
-        return raw.split(/[/\\]/).pop() || "";
-      }
-
-      const wikiNodes = useMemo(() => {
-        if (!graph || !graph.nodes) return null;
-        const callers = graph.callers || {};
-        const outs = new Map();
-        for (const edge of graph.edges || []) outs.set(edge.from, (outs.get(edge.from) || 0) + 1);
-        const nodes = graph.nodes.map((node) => {
-          const inbound = callers[node.path] || 0;
-          const outbound = outs.get(node.path) || 0;
-          return {
-            path: node.path,
-            rel: node.rel,
-            title: node.title || node.path,
-            group: String(node.path).split("/").slice(0, -1).join("/") || "（根）",
-            in: inbound,
-            out: outbound,
-            degree: inbound + outbound,
-            symbols: (node.symbols || []).length
-          };
-        }).sort((a, b) => b.degree - a.degree || a.path.localeCompare(b.path));
-        return {
-          nodes,
-          edges: (graph.edges || []).map((edge) => ({ from: edge.from, to: edge.to })),
-          nodeCount: nodes.length,
-          edgeCount: (graph.edges || []).length,
-          isolated: nodes.filter((node) => node.degree === 0).length
-        };
-      }, [graph]);
-
-      const skeletonPages = entries.filter((entry) => (entry.analysisLevel ?? "skeleton") === "skeleton").length;
-      const levelBadge = { skeleton: "骨架", ai: "AI", manual: "人工" };
-      const overviewLines = String(overview?.body || "").split("\n").slice(0, 26).join("\n");
-
-      return React.createElement(React.Fragment, null,
-        React.createElement("div", { className: "_kb_kbhead" },
-          React.createElement("span", null, `代码仓库${repo ? ` · ${repo}` : ""}`),
-          React.createElement("button", { type: "button", disabled: Boolean(busy), onClick: () => refresh(repo) }, busy || "刷新")),
-        error && React.createElement("div", { className: "_kb_error" }, error),
-        notice && React.createElement("div", { className: "_kb_hint" }, notice),
-        React.createElement("div", { className: "_kb_insightbox" },
-          React.createElement("div", { className: "_kb_sectionlabel" }, "扫描 / 同步本地仓库"),
-          React.createElement("div", { className: "_kb_wikiform" },
-            React.createElement("input", {
-              className: "_kb_wikiinput",
-              value: form.repoPath,
-              placeholder: "仓库绝对路径，如 D:\\code\\my-repo",
-              onChange: (event) => setForm({ ...form, repoPath: event.target.value })
-            }),
-            React.createElement("input", {
-              className: "_kb_wikiinput",
-              value: form.repoName,
-              placeholder: "仓库名（默认取目录名；同时是 vault 里的项目名）",
-              onChange: (event) => setForm({ ...form, repoName: event.target.value })
-            }),
-            React.createElement("input", {
-              className: "_kb_wikiinput",
-              value: form.maxFiles,
-              placeholder: "最多文件数（默认 40）",
-              onChange: (event) => setForm({ ...form, maxFiles: event.target.value })
-            }),
-            React.createElement("div", { className: "_kb_inboxactions" },
-              React.createElement("button", {
-                type: "button",
-                disabled: Boolean(busy) || !form.repoPath.trim(),
-                title: "为仓库里每个源文件生成一张 Wiki 骨架卡（原地写进 vault）",
-                onClick: () => post("/wiki/scan", { repoPath: form.repoPath.trim(), repoName: form.repoName.trim(), maxFiles: Number(form.maxFiles) || undefined }, "扫描")
-              }, "扫描仓库"),
-              React.createElement("button", {
-                type: "button",
-                disabled: Boolean(busy) || !form.repoPath.trim() || !repos.length,
-                title: "以磁盘为准双向对账：新增/变更/剪除孤儿（已语义回填的页受保护）",
-                onClick: () => post("/wiki/sync", { repoPath: form.repoPath.trim(), repoName: form.repoName.trim() || repo, maxFiles: Number(form.maxFiles) || undefined }, "同步")
-              }, "同步")),
-            React.createElement("div", { className: "_kb_hint" }, "扫描/同步会直接在 vault 里建或改 wiki 页（你的点击即同意）。「AI 凝练」由 agent 读骨架后用 kb_wiki_upsert 回填。"))),
-        repos.length > 0 && React.createElement("div", { className: "_kb_insightbox" },
-          React.createElement("div", { className: "_kb_sectionlabel" }, `已收录仓库（${repos.length}）`),
-          React.createElement("div", { className: "_kb_tags" },
-            repos.map((name) => React.createElement("button", {
-              key: name,
-              type: "button",
-              className: "_kb_tag",
-              "data-active": name === repo,
-              onClick: () => { setRepo(name); loadRepo(name).catch((e) => setError(e.message)); }
-            }, name)))),
-        repo && React.createElement("div", { className: "_kb_insightbox" },
-          React.createElement("div", { className: "_kb_sectionlabel" },
-            `页面 ${entries.length}${skeletonPages ? ` · 待凝练 ${skeletonPages}` : ""}`),
-          skeletonPages > 0 && React.createElement("div", { className: "_kb_hint" },
-            `还有 ${skeletonPages} 页是骨架 —— 让 agent 读完后用 kb_wiki_upsert 回填语义描述。`),
-          entries.slice(0, 40).map((entry, i) => React.createElement("button", {
-            key: entry.rel || i,
-            type: "button",
-            className: "_kb_kbrow",
-            title: entry.rel,
-            onClick: () => onOpen({ path: entry.rel, name: entry.title || entry.path || entry.rel })
-          },
-            React.createElement("span", { className: "_kb_kbrowtitle" },
-              entry.title || entry.path || entry.rel,
-              React.createElement("span", { className: "_kb_badge", "data-origin": "local" }, levelBadge[entry.analysisLevel] || entry.analysisLevel || "骨架")),
-            React.createElement("span", { className: "_kb_kbrowmeta" }, entry.path || entry.rel)))),
-        wikiNodes && wikiNodes.nodeCount > 0 && React.createElement("div", { className: "_kb_insightbox" },
-          React.createElement("div", { className: "_kb_sectionlabel" },
-            `依赖图 · ${wikiNodes.nodeCount} 模块 / ${wikiNodes.edgeCount} 条 import 边 / ${wikiNodes.isolated} 孤立`),
-          React.createElement(GraphView, { graph: wikiNodes, onOpen: (target) => onOpen({ path: target.rel || target.path, name: target.name }) })),
-        repo && React.createElement("div", { className: "_kb_insightbox" },
-          React.createElement("div", { className: "_kb_sectionlabel" }, "项目概览"),
-          React.createElement("div", { className: "_kb_inboxactions" },
-            React.createElement("button", {
-              type: "button",
-              disabled: Boolean(busy),
-              title: "重新生成 <repo>/project-overview.md（体量/目录/语言/核心模块/页面清单）",
-              onClick: () => post("/wiki/overview", { repo }, "概览")
-            }, "刷新概览")),
-          overviewLines
-            ? React.createElement("pre", { className: "_kb_wikibody" }, overviewLines)
-            : React.createElement("div", { className: "_kb_hint" }, "还没有概览页，点「刷新概览」生成。")));
     }
 
     function Workbench({ onClose, sessions, workspaces, modelDirectories }) {
@@ -1889,7 +1596,7 @@ window.__ModuleLoader__.load({
       const [searchResults, setSearchResults] = useState(null);
       const [searching, setSearching] = useState(false);
       const [lastDelete, setLastDelete] = useState(null);
-      const [leftView, setLeftView] = useState("files");
+      const [leftView, setLeftView] = useState("knowledge");
       const [kbQuery, setKbQuery] = useState("");
       const rootRef = useRef(null);
       const saveTimerRef = useRef(null);
@@ -1992,322 +1699,18 @@ window.__ModuleLoader__.load({
         await openFile(entry);
       };
 
-      const save = async ({ auto = false } = {}) => {
-        if (!note?.path || note.image || note.content === editor) return true;
-        if (savePromiseRef.current) return savePromiseRef.current;
-        const path = note.path;
-        const content = editor;
-        const run = (async () => {
-          setSaving(true);
-          setStatus(auto ? "自动保存中…" : "保存中…");
-          try {
-            const payload = await requestJson(`${API}/save`, {
-              method: "PUT",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ path, content })
-            });
-            setNote((value) => value?.path === path ? { ...value, content, modifiedAt: payload.modifiedAt } : value);
-            setStatus(auto ? "已自动保存" : "已保存");
-            return true;
-          } catch (e) {
-            setStatus(e.message);
-            return false;
-          } finally {
-            setSaving(false);
-          }
-        })();
-        savePromiseRef.current = run;
-        try {
-          return await run;
-        } finally {
-          if (savePromiseRef.current === run) savePromiseRef.current = null;
-        }
+      const save = async () => {
+        if (note?.path && note.content !== editor) setStatus("此面板只读；请通过 Obsidian MCP 修改笔记。");
+        return true;
       };
       saveRef.current = save;
 
-      useEffect(() => {
-        if (saveTimerRef.current !== null) window.clearTimeout(saveTimerRef.current);
-        if (!note || note.image || note.content === editor) return undefined;
-        saveTimerRef.current = window.setTimeout(() => {
-          saveRef.current?.({ auto: true });
-        }, 800);
-        return () => {
-          if (saveTimerRef.current !== null) window.clearTimeout(saveTimerRef.current);
-          saveTimerRef.current = null;
-        };
-      }, [editor, note?.path, note?.content, note?.image]);
-
-      const refreshTree = () => setTreeRevision((value) => value + 1);
-      const newItemParent = () => {
-        if (focusedFolder) return focusedFolder;
-        const slash = selected.lastIndexOf("/");
-        return slash === -1 ? "" : selected.slice(0, slash);
-      };
-      const parentForEntry = (entry) => {
-        if (!entry) return newItemParent();
-        if (entry.kind === "directory") return entry.path;
-        const slash = entry.path.lastIndexOf("/");
-        return slash === -1 ? "" : entry.path.slice(0, slash);
-      };
-      const openNameDialog = (kind, parent) => {
-        setContextMenu(null);
-        setNameValue(kind === "folder" ? "新文件夹" : "未命名笔记");
-        setNameDialog({ kind, parent });
-      };
-      const createFolderAt = async (parent, name) => {
-        if (!name) return;
-        const saved = await saveRef.current?.();
-        if (saved === false) return;
-        setTreeActionError("");
-        try {
-          const payload = await requestJson(`${API}/create-folder`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ parent, name })
-          });
-          setFocusedFolder(payload.path);
-          refreshTree();
-          setStatus("文件夹已创建");
-        } catch (e) {
-          setTreeActionError(e.message);
-          setStatus(e.message);
-        }
-      };
-      const createNoteAt = async (parent, name) => {
-        if (!name) return;
-        const saved = await saveRef.current?.();
-        if (saved === false) return;
-        setTreeActionError("");
-        try {
-          const payload = await requestJson(`${API}/create-note`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ parent, name, content: "" })
-          });
-          refreshTree();
-          setStatus("笔记已创建");
-          await openFile({ path: payload.path, name: payload.name, kind: "file" });
-        } catch (e) {
-          setTreeActionError(e.message);
-          setStatus(e.message);
-        }
-      };
-      const submitName = async (event) => {
-        event.preventDefault();
-        const name = nameValue.trim();
-        if (!name || !nameDialog) return;
-        const dialog = nameDialog;
-        setNameDialog(null);
-        if (dialog.kind === "folder") await createFolderAt(dialog.parent, name);
-        else if (dialog.kind === "note") await createNoteAt(dialog.parent, name);
-        else await renameEntry(dialog.entry, name);
-      };
-      const openRenameDialog = (entry) => {
-        setContextMenu(null);
-        setNameValue(entry.name);
-        setNameDialog({ kind: "rename", entry });
-      };
-      const beginTitleEdit = () => {
-        if (!note || note.image) return;
-        titleEditingRef.current = true;
-        setTitleValue(note.name || "");
-        setTitleEditing(true);
-      };
-      const renameEntry = async (entry, name) => {
-        if (!entry || !name) return;
-        const saved = await saveRef.current?.();
-        if (saved === false) return;
-        setTreeActionError("");
-        try {
-          const payload = await requestJson(`${API}/rename`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ path: entry.path, name })
-          });
-          const source = entry.path;
-          const nextPath = (value) => {
-            if (!value) return value;
-            if (value === source) return payload.path;
-            return value.startsWith(`${source}/`) ? `${payload.path}${value.slice(source.length)}` : value;
-          };
-          setSelected(nextPath);
-          setFocusedFolder((value) => nextPath(value));
-          setNote((value) => value?.path ? { ...value, path: nextPath(value.path), name: value.path === source ? payload.name : value.name } : value);
-          refreshTree();
-          setStatus("已重命名");
-        } catch (e) {
-          setTreeActionError(e.message);
-          setStatus(e.message);
-        }
-      };
-      const finishTitleEdit = async (cancel = false) => {
-        if (!titleEditingRef.current) return;
-        titleEditingRef.current = false;
-        setTitleEditing(false);
-        const currentNote = note;
-        const nextName = titleValue.trim();
-        if (cancel || !currentNote || currentNote.image || !nextName || nextName === currentNote.name) {
-          if (!cancel && currentNote) setTitleValue(currentNote.name || "");
-          return;
-        }
-        await renameEntry(currentNote, nextName);
-      };
-      const askDelete = (entry) => {
-        setContextMenu(null);
-        setDeleteDialog(entry);
-      };
-      const deleteEntry = async (entry) => {
-        if (!entry) return;
-        const saved = await saveRef.current?.();
-        if (saved === false) return;
-        setTreeActionError("");
-        try {
-          const payload = await requestJson(`${API}/delete`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ path: entry.path })
-          });
-          const deletedPath = entry.path;
-          if (selected === deletedPath || selected.startsWith(`${deletedPath}/`)) {
-            setSelected("");
-            setNote(null);
-            setEditor("");
-          }
-          setLastDelete({ id: payload.undoId, name: entry.name });
-          if (focusedFolder === deletedPath || focusedFolder.startsWith(`${deletedPath}/`)) setFocusedFolder("");
-          refreshTree();
-          setStatus("已删除");
-        } catch (e) {
-          setTreeActionError(e.message);
-          setStatus(e.message);
-        }
-      };
-      const undoDelete = async () => {
-        if (!lastDelete?.id) return;
-        setTreeActionError("");
-        try {
-          await requestJson(`${API}/undo-delete`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ id: lastDelete.id })
-          });
-          setLastDelete(null);
-          refreshTree();
-          setStatus("已撤销删除");
-        } catch (e) {
-          setTreeActionError(e.message);
-          setStatus(e.message);
-        }
-      };
-      const confirmDelete = async () => {
-        const target = deleteDialog;
-        setDeleteDialog(null);
-        await deleteEntry(target);
-      };
-      const openContextMenu = (event, entry = null) => {
-        event.preventDefault();
-        event.stopPropagation();
-        if (entry?.kind === "directory") setFocusedFolder(entry.path);
-        const width = 220;
-        const height = entry ? 300 : 100;
-        setContextMenu({
-          x: Math.max(8, Math.min(event.clientX, window.innerWidth - width - 8)),
-          y: Math.max(8, Math.min(event.clientY, window.innerHeight - height - 8)),
-          entry,
-          parent: parentForEntry(entry)
-        });
-      };
-      const closeContextMenuOutside = (event) => {
-        if (contextMenu && !event.target.closest?.("._kb_contextmenu")) setContextMenu(null);
-      };
-      const startMove = (entry) => {
-        setTreeActionError("");
-        setContextMenu(null);
-        setMoving({ entry });
-        setDropTargetPath("");
-        setStatus(`正在移动「${entry.name}」，请选择目标文件夹`);
-      };
-      const addToChat = async (entry) => {
-        setContextMenu(null);
-        if (!entry?.path) return;
-        if (await saveRef.current?.() === false) return;
-        try {
-          setStatus(`正在整理「${entry.name}」的上下文…`);
-          const payload = await requestJson(`${API}/context?path=${encodeURIComponent(entry.path)}`);
-          const suffix = payload.truncated ? "（内容较多，已截取前一部分）" : "";
-          setChatInsertRequest({
-            id: Date.now(),
-            name: entry.name,
-            path: payload.path || entry.path,
-            kind: payload.kind || entry.kind,
-            content: payload.content,
-            truncated: payload.truncated,
-            fileCount: payload.files?.length || 0
-          });
-          setStatus(`已加入对话：${entry.name}${suffix}`);
-        } catch (error) {
-          setTreeActionError(error.message);
-          setStatus(error.message);
-        }
-      };
-      const cancelMove = () => {
-        setMoving(null);
-        setDropTargetPath("");
-        setStatus("已取消移动");
-      };
-      const hoverMoveTarget = (entry) => {
-        if (!moving?.entry) return;
-        if (moving.entry.path === entry.path) {
-          setDropTargetPath("");
-          return;
-        }
-        setDropTargetPath(entry.path);
-        setStatus(`移动「${moving.entry.name}」到「${entry.name}」`);
-      };
-      const moveTo = async (destination) => {
-        if (!moving?.entry) return;
-        if (await saveRef.current?.() === false) return;
-        const source = moving.entry.path;
-        const destinationPath = typeof destination === "string" ? destination : destination?.path || "";
-        setTreeActionError("");
-        try {
-          const payload = await requestJson(`${API}/move`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ source, destination: destinationPath })
-          });
-          const nextPath = (value) => {
-            if (!value) return value;
-            if (value === source) return payload.path;
-            return value.startsWith(`${source}/`) ? `${payload.path}${value.slice(source.length)}` : value;
-          };
-          setSelected(nextPath);
-          setNote((value) => value?.path ? { ...value, path: nextPath(value.path) } : value);
-          setMoving(null);
-          setDropTargetPath("");
-          refreshTree();
-          setStatus("已移动");
-        } catch (e) {
-          setTreeActionError(e.message);
-          setStatus(e.message);
-        }
-      };
-      const closeWorkbench = async () => {
-        if (await saveRef.current?.() === false) return;
-        onClose();
-      };
+      const closeWorkbench = () => onClose();
       const onKeyDown = (event) => {
-        if (event.key === "Escape") {
-          if (deleteDialog) setDeleteDialog(null);
-          else if (nameDialog) setNameDialog(null);
-          else if (contextMenu) setContextMenu(null);
-          else if (moving) cancelMove();
-          else closeWorkbench();
-          return;
-        }
+        if (event.key === "Escape") closeWorkbench();
         if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
           event.preventDefault();
-          save({ auto: false });
+          setStatus("此面板只读；请通过 Obsidian MCP 修改笔记。");
         }
       };
 
@@ -2317,7 +1720,6 @@ window.__ModuleLoader__.load({
         ref: rootRef,
         tabIndex: -1,
         onKeyDown,
-        onPointerDown: closeContextMenuOutside,
         style: { paddingTop: `${TITLEBAR_INSET}px`, gridTemplateColumns: `${widths.left}px 1px minmax(360px, 1fr) 1px ${widths.right}px` }
       },
         React.createElement("aside", { className: "_kb_left" },
@@ -2326,15 +1728,11 @@ window.__ModuleLoader__.load({
             React.createElement("div", { className: "_kb_title" },
               React.createElement("strong", null, vaultName),
               React.createElement("span", null, meta?.vault?.path || "正在读取仓库路径…")),
-          React.createElement("button", { className: "_kb_iconbtn", type: "button", title: "关闭工作台", onClick: closeWorkbench }, "×")),
-          React.createElement("div", { className: "_kb_leftbody", onContextMenu: (event) => openContextMenu(event, null) },
+            React.createElement("button", { className: "_kb_iconbtn", type: "button", title: "关闭知识面板", onClick: closeWorkbench }, "×")),
+          React.createElement("div", { className: "_kb_leftbody" },
             React.createElement("div", { className: "_kb_switch" },
-              React.createElement("button", { className: "_kb_switchbtn", type: "button", "data-active": leftView === "files", onClick: () => setLeftView("files") }, "文件"),
               React.createElement("button", { className: "_kb_switchbtn", type: "button", "data-active": leftView === "knowledge", onClick: () => setLeftView("knowledge") }, "知识"),
-              React.createElement("button", { className: "_kb_switchbtn", type: "button", "data-active": leftView === "insight", onClick: () => setLeftView("insight") }, "洞察"),
-              React.createElement("button", { className: "_kb_switchbtn", type: "button", "data-active": leftView === "code", onClick: () => setLeftView("code") }, "代码")),
-            leftView === "code" && React.createElement(PanelBoundary, { label: "代码" },
-              React.createElement(WikiPanel, { onOpen: openFile })),
+              React.createElement("button", { className: "_kb_switchbtn", type: "button", "data-active": leftView === "insight", onClick: () => setLeftView("insight") }, "洞察")),
             leftView === "knowledge" && React.createElement(PanelBoundary, { label: "知识" },
               React.createElement(KnowledgePanel, { onOpen: openFile, query: kbQuery, onQueryChange: setKbQuery })),
             leftView === "insight" && React.createElement(PanelBoundary, { label: "洞察" },
@@ -2342,96 +1740,21 @@ window.__ModuleLoader__.load({
                 onOpen: openFile,
                 notePath: note && note.path,
                 onTagClick: (tag) => { setKbQuery(tag); setLeftView("knowledge"); }
-              })),
-            leftView === "files" && React.createElement("div", { className: "_kb_sectionhead" },
-              React.createElement("div", { className: "_kb_sectionlabel" }, "仓库")),
-            leftView === "files" && React.createElement("div", { className: "_kb_searchbar" },
-              React.createElement("input", { className: "_kb_searchinput", value: searchQuery, onChange: (event) => setSearchQuery(event.target.value), placeholder: "搜索仓库…", "aria-label": "搜索仓库" }),
-              searchQuery && React.createElement("button", { className: "_kb_searchclear", type: "button", onClick: () => setSearchQuery(""), "aria-label": "清除搜索" }, "×")),
-            leftView === "files" && lastDelete && React.createElement("div", { className: "_kb_undobar" },
-              React.createElement("span", null, `已移到回收站：${lastDelete.name}`),
-              React.createElement("button", { className: "_kb_undobutton", type: "button", onClick: undoDelete }, "撤销")),
-            leftView === "files" && moving && React.createElement("div", { className: "_kb_movebar", "data-dragging": Boolean(dropTargetPath) },
-              React.createElement("div", { className: "_kb_moveinfo" },
-                React.createElement("strong", null, `移动：${moving.entry.name}`),
-                React.createElement("span", null, dropTargetPath ? `放入「${dropTargetPath.split("/").pop()}」` : "按住拖到目标文件夹")),
-              React.createElement("button", { className: "_kb_moveaction", type: "button", onClick: () => moveTo("") }, "移到根目录"),
-              React.createElement("button", { className: "_kb_moveaction", type: "button", onClick: cancelMove }, "取消")),
-            leftView === "files" && treeActionError && React.createElement("div", { className: "_kb_error" }, treeActionError),
-            leftView === "files" && React.createElement(PanelBoundary, { label: "文件" },
-              metaError ? React.createElement("div", { className: "_kb_error" }, metaError) : !meta?.configured ? React.createElement("div", { className: "_kb_hint" }, "没有找到本机 Obsidian 仓库。可以通过 OBSIDIAN_VAULT_PATH 指定路径。") : searchQuery.trim() ? React.createElement(SearchResults, { payload: searchResults, loading: searching, onOpen: openSearchResult }) : React.createElement(VaultTree, { selected, onOpen: openFile, revision: treeRevision, movingEntry: moving?.entry, dropTargetPath, onMoveStart: startMove, onMoveTarget: moveTo, onMoveHover: hoverMoveTarget, onMoveCancel: cancelMove, onFolderFocus: setFocusedFolder, onContextMenu: openContextMenu })))),
-        React.createElement(ResizeHandle, { side: "left", dragging: drag?.side === "left", onPointerDown: startResize }),
-          React.createElement("main", { className: "_kb_center" },
-            React.createElement("div", { className: "_kb_editorbar" },
-              React.createElement("span", { className: "_kb_fileicon" }, note?.image ? "▧" : "✦"),
-            titleEditing ? React.createElement("input", {
-              className: "_kb_filename _kb_titleinput",
-              ref: titleInputRef,
-              value: titleValue,
-              onChange: (event) => setTitleValue(event.target.value),
-              onBlur: () => finishTitleEdit(),
-              onKeyDown: (event) => {
-                if (event.key === "Escape") {
-                  event.preventDefault();
-                  finishTitleEdit(true);
-                } else if (event.key === "Enter") {
-                  event.preventDefault();
-                  event.currentTarget.blur();
-                }
-              },
-              "aria-label": "修改笔记名称"
-            }) : note && !note.image ? React.createElement("button", {
-              className: "_kb_filename _kb_titlebutton",
-              type: "button",
-              onClick: beginTitleEdit,
-              title: "点击修改笔记名称"
-            }, note.name) : React.createElement("span", { className: "_kb_filename" }, note?.name || "选择一篇笔记")),
+              })))),
+        React.createElement("main", { className: "_kb_center" },
+          React.createElement("div", { className: "_kb_editorbar" },
+            React.createElement("span", { className: "_kb_fileicon" }, note?.image ? "▧" : "✦"),
+            React.createElement("span", { className: "_kb_filename" }, note?.name || "选择一篇笔记")),
           React.createElement("div", { className: "_kb_editor" },
             metaError && React.createElement("div", { className: "_kb_error" }, metaError),
             !note && !metaError && React.createElement("div", { className: "_kb_empty" }, "从左侧选择一篇 Markdown 笔记"),
             note?.image && React.createElement("img", { className: "_kb_image", src: `${API}/asset?path=${encodeURIComponent(note.path)}`, alt: note.name }),
             note && !note.image && React.createElement(LiveMarkdownEditor, { markdown: editor, onChange: setEditor })),
           React.createElement("div", { className: "_kb_status" }, React.createElement("span", null, status), React.createElement("span", null, note?.path || ""))),
-        React.createElement(ResizeHandle, { side: "right", dragging: drag?.side === "right", onPointerDown: startResize }),
-        React.createElement(ChatPanel, { sessions, workspaces, modelDirectories, notePath: note?.path, noteContent: note?.image ? null : editor, insertRequest: chatInsertRequest }),
-        contextMenu && React.createElement("div", {
-          className: "_kb_contextmenu",
-          style: { left: contextMenu.x, top: contextMenu.y },
-          onPointerDown: (event) => event.stopPropagation(),
-          onClick: (event) => event.stopPropagation(),
-          onContextMenu: (event) => event.preventDefault()
-        },
-          React.createElement("button", { className: "_kb_contextitem", type: "button", onClick: () => openNameDialog("note", contextMenu.parent) }, "新建笔记"),
-          React.createElement("button", { className: "_kb_contextitem", type: "button", onClick: () => openNameDialog("folder", contextMenu.parent) }, "新建文件夹"),
-          contextMenu.entry && React.createElement("div", { className: "_kb_contextsep" }),
-          contextMenu.entry && React.createElement("button", { className: "_kb_contextitem", type: "button", onClick: () => addToChat(contextMenu.entry) }, "加入对话"),
-          contextMenu.entry && React.createElement("div", { className: "_kb_contextsep" }),
-          contextMenu.entry && React.createElement("button", { className: "_kb_contextitem", type: "button", onClick: () => startMove(contextMenu.entry) }, "移动到…"),
-          React.createElement("div", { className: "_kb_contextsep" }),
-          contextMenu.entry && React.createElement("button", { className: "_kb_contextitem", type: "button", onClick: () => openRenameDialog(contextMenu.entry) }, "重命名"),
-          contextMenu.entry && React.createElement("button", { className: "_kb_contextitem", "data-danger": true, type: "button", onClick: () => askDelete(contextMenu.entry) }, "删除")),
-        nameDialog && React.createElement("div", { className: "_kb_dialogbackdrop", onPointerDown: () => setNameDialog(null) },
-          React.createElement("form", { className: "_kb_dialog", onSubmit: submitName, onPointerDown: (event) => event.stopPropagation() },
-            React.createElement("div", { className: "_kb_dialogtitle" }, nameDialog.kind === "folder" ? "新建文件夹" : nameDialog.kind === "note" ? "新建笔记" : "重命名"),
-            React.createElement("input", {
-              className: "_kb_dialoginput",
-              autoFocus: true,
-              value: nameValue,
-              onChange: (event) => setNameValue(event.target.value),
-              onKeyDown: (event) => { if (event.key === "Escape") { event.preventDefault(); setNameDialog(null); } }
-            }),
-            React.createElement("div", { className: "_kb_dialogactions" },
-              React.createElement("button", { className: "_kb_dialogbutton", type: "button", onClick: () => setNameDialog(null) }, "取消"),
-              React.createElement("button", { className: "_kb_dialogbutton", type: "submit", "data-primary": true }, "创建")))),
-        deleteDialog && React.createElement("div", { className: "_kb_dialogbackdrop", onPointerDown: () => setDeleteDialog(null) },
-          React.createElement("div", { className: "_kb_dialog", onPointerDown: (event) => event.stopPropagation() },
-            React.createElement("div", { className: "_kb_dialogtitle" }, `删除「${deleteDialog.name}」？`),
-            React.createElement("div", { className: "_kb_dialogcopy" }, deleteDialog.kind === "directory" ? "文件夹中的内容会一起移入回收站，可在删除后立即撤销。" : "文件会移入回收站，可在删除后立即撤销。"),
-            React.createElement("div", { className: "_kb_dialogactions" },
-              React.createElement("button", { className: "_kb_dialogbutton", type: "button", onClick: () => setDeleteDialog(null) }, "取消"),
-              React.createElement("button", { className: "_kb_dialogbutton", "data-danger": true, type: "button", onClick: confirmDelete }, "删除")))));
+        React.createElement("aside", { className: "_kb_right" },
+          React.createElement(ChatPanel, { sessions, workspaces, modelDirectories, notePath: note?.path, noteContent: note?.image ? null : editor, insertRequest: chatInsertRequest }))
+      );
     }
-
     function ObsidianIcon({ idPrefix = "obsidian" }) {
       const svg = `
         <defs>

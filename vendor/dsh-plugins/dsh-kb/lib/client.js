@@ -24848,10 +24848,6 @@
         "._kb_tag{border:1px solid var(--dsw-alias-border-l2);border-radius:999px;background:transparent;color:var(--dsw-alias-label-secondary);font-size:11px;line-height:18px;padding:0 8px;cursor:pointer}",
         "._kb_tag:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}",
         "._kb_tag[data-active=true]{background:color-mix(in srgb,#7c65d7 16%,transparent);color:#7c65d7;border-color:color-mix(in srgb,#7c65d7 35%,transparent)}",
-        "._kb_wikiform{display:flex;flex-direction:column;gap:4px;padding:2px 6px 0}",
-        "._kb_wikiinput{box-sizing:border-box;width:100%;border:1px solid var(--dsw-alias-border-l2);border-radius:7px;background:transparent;color:var(--dsw-alias-label-primary);font:11px var(--ds-font-family,Inter,system-ui,sans-serif);padding:4px 7px}",
-        "._kb_wikiinput::placeholder{color:var(--dsw-alias-label-tertiary)}",
-        "._kb_wikibody{max-height:220px;overflow:auto;margin:2px 6px 0;padding:8px;border-radius:8px;background:color-mix(in srgb,var(--dsw-alias-label-primary) 4%,transparent);color:var(--dsw-alias-label-secondary);font:11px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;word-break:break-word}",
         // P5 图谱 / 缺口
         "._kb_graph{display:block;width:100%;height:auto;margin-top:2px;border-radius:8px;background:color-mix(in srgb,var(--dsw-alias-label-primary) 3%,transparent);cursor:grab}",
         "._kb_graphedge{stroke:var(--dsw-alias-border-l2);stroke-width:1}",
@@ -25172,6 +25168,8 @@ ${question3}`;
                 history(),
                 keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
                 EditorView.lineWrapping,
+                EditorState.readOnly.of(true),
+                EditorView.editable.of(false),
                 livePreviewPlugin,
                 updateListener2,
                 EditorView.domEventHandlers({ focus: ensureTitleLine }),
@@ -25893,35 +25891,6 @@ ${question3}`;
         useEffect(() => {
           if (!data2) load(null);
         }, [data2, load]);
-        const [inbox, setInbox] = useState(null);
-        const [inboxBusy, setInboxBusy] = useState(false);
-        const loadInbox = useCallback(async () => {
-          try {
-            setInbox(await requestJson(`${API}/knowledge/inbox`));
-          } catch (e) {
-            setError(e.message);
-          }
-        }, []);
-        useEffect(() => {
-          if (!inbox) loadInbox();
-        }, [inbox, loadInbox]);
-        const inboxAction = useCallback(async (action, item, extra = {}) => {
-          setInboxBusy(true);
-          setError("");
-          try {
-            await requestJson(`${API}/knowledge/inbox`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(Object.assign({ action, path: item.path }, extra))
-            });
-            await loadInbox();
-            await load(project);
-          } catch (e) {
-            setError(e.message);
-          } finally {
-            setInboxBusy(false);
-          }
-        }, [project, load, loadInbox]);
         const search = useCallback(async (event, overrideType) => {
           if (event) event.preventDefault();
           const q = query.trim();
@@ -25962,52 +25931,6 @@ ${question3}`;
               setResults(null);
               load(null);
             } }, "\u2190 \u5168\u90E8")
-          ),
-          inbox && inbox.count > 0 && React.createElement(
-            "div",
-            { className: "_kb_inbox" },
-            React.createElement(
-              "div",
-              { className: "_kb_kbhead" },
-              React.createElement("span", null, `\u5F85\u5BA1 ${inbox.count} \u6761`),
-              React.createElement("button", { type: "button", disabled: inboxBusy, onClick: () => loadInbox() }, "\u5237\u65B0")
-            ),
-            inbox.items.map((item) => React.createElement(
-              "div",
-              { key: item.path, className: "_kb_inboxitem" },
-              React.createElement(
-                "button",
-                {
-                  type: "button",
-                  className: "_kb_kbrow",
-                  onClick: () => onOpen({ path: item.path, name: item.title }),
-                  title: item.path
-                },
-                React.createElement("span", { className: "_kb_kbrowtitle" }, item.title, badge(item.origin)),
-                React.createElement(
-                  "span",
-                  { className: "_kb_kbrowmeta" },
-                  [
-                    item.confidence != null ? `conf ${item.confidence}` : null,
-                    item.captured ? String(item.captured).slice(0, 10) : null,
-                    (item.suggest || []).length ? `\u5019\u9009 ${item.suggest.length}` : "\u65E0\u5019\u9009"
-                  ].filter(Boolean).join(" \xB7 ")
-                ),
-                item.summary && React.createElement("span", { className: "_kb_kbsnippet" }, item.summary)
-              ),
-              React.createElement(
-                "div",
-                { className: "_kb_inboxactions" },
-                React.createElement("button", { type: "button", disabled: inboxBusy, onClick: () => inboxAction("promote", item), title: "\u5F52\u5165\u6B63\u5F0F\u76EE\u5F55\uFF08\u81EA\u52A8\uFF0C\u5237\u65B0 INDEX.md\uFF09" }, "\u5F52\u5E93"),
-                React.createElement("button", {
-                  type: "button",
-                  disabled: inboxBusy || !(item.suggest || []).length,
-                  onClick: () => inboxAction("merge", item, { into: item.suggest[0] }),
-                  title: (item.suggest || [])[0] ? `\u5408\u5E76\u8FDB ${item.suggest[0]}` : "\u6CA1\u6709\u5408\u5E76\u5019\u9009"
-                }, "\u5408\u5E76"),
-                React.createElement("button", { type: "button", "data-danger": true, disabled: inboxBusy, onClick: () => inboxAction("drop", item, { reason: "panel" }), title: "\u4E22\u5F03\u5230 Inbox/.dropped\uFF08\u53EF\u6062\u590D\uFF09" }, "\u4E22\u5F03")
-              )
-            ))
           ),
           !project && (data2?.projects || []).map((p) => React.createElement(
             "button",
@@ -26055,8 +25978,7 @@ ${question3}`;
               ["", "\u5168\u90E8"],
               ["note", "\u666E\u901A\u7B14\u8BB0"],
               ["card", "card"],
-              ["memory", "memory"],
-              ["wiki", "wiki"]
+              ["memory", "memory"]
             ].map(([value, label]) => React.createElement("button", {
               key: value || "all",
               type: "button",
@@ -26261,24 +26183,6 @@ ${node.path}
             alive = false;
           };
         }, [notePath]);
-        const rebuildIndexes = useCallback(async () => {
-          setBusy(true);
-          setError("");
-          try {
-            const out = await requestJson(`${API}/knowledge/reindex`, {
-              method: "POST",
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify({ fixIndexes: true })
-            });
-            setNotice(`\u7D22\u5F15\u5DF2\u91CD\u5EFA\uFF1A${out.notes} \u7BC7\uFF0C\u5237\u65B0 ${out.fixed.length} \u4E2A\u9879\u76EE\u7D22\u5F15`);
-            setGaps(await requestJson(`${API}/knowledge/gaps`));
-            setDoctor(await requestJson(`${API}/knowledge/doctor`));
-          } catch (e) {
-            setError(e.message);
-          } finally {
-            setBusy(false);
-          }
-        }, []);
         const levelLabel = { error: "\u9519\u8BEF", warn: "\u8B66\u544A", info: "\u63D0\u793A" };
         const linkRows = links ? [
           ...(links.backlinks || []).map((row) => Object.assign({}, row, { kind: "\u2190" })),
@@ -26371,16 +26275,6 @@ ${node.path}
               { className: "_kb_sectionlabel" },
               `\u4F53\u68C0 \xB7 \u9519\u8BEF ${doctor.errors} / \u8B66\u544A ${doctor.warns} / \u63D0\u793A ${doctor.infos}`
             ),
-            React.createElement(
-              "div",
-              { className: "_kb_inboxactions" },
-              React.createElement("button", {
-                type: "button",
-                disabled: busy,
-                title: "\u5F3A\u5236\u5168\u91CF\u91CD\u5EFA\u7D22\u5F15\uFF0C\u5E76\u91CD\u5199\u843D\u540E/\u7F3A\u5931\u7684\u9879\u76EE INDEX.md\uFF08\u53EA\u52A8\u6D3E\u751F\u6587\u4EF6\uFF09",
-                onClick: () => rebuildIndexes()
-              }, "\u91CD\u5EFA\u7D22\u5F15")
-            ),
             doctor.problems.length === 0 ? React.createElement("div", { className: "_kb_hint" }, "\u6CA1\u6709\u95EE\u9898\uFF0C\u5E93\u5F88\u5E72\u51C0\u3002") : doctor.problems.slice(0, 40).map((p, i) => React.createElement(
               "button",
               {
@@ -26417,243 +26311,6 @@ ${node.path}
           )
         );
       }
-      function WikiPanel({ onOpen }) {
-        const [repos, setRepos] = useState([]);
-        const [repo, setRepo] = useState("");
-        const [entries, setEntries] = useState([]);
-        const [graph, setGraph] = useState(null);
-        const [overview, setOverview] = useState(null);
-        const [form, setForm] = useState({ repoPath: "", repoName: "", maxFiles: "40" });
-        const [busy, setBusy] = useState("");
-        const [error, setError] = useState("");
-        const [notice, setNotice] = useState("");
-        const loadRepo = useCallback(async (name2) => {
-          if (!name2) {
-            setEntries([]);
-            setGraph(null);
-            setOverview(null);
-            return;
-          }
-          const query = encodeURIComponent(name2);
-          const [list, g, o] = await Promise.all([
-            requestJson(`${API}/wiki/list?repo=${query}`),
-            requestJson(`${API}/wiki/graph?repo=${query}`).catch(() => null),
-            requestJson(`${API}/wiki/overview?repo=${query}`).catch(() => null)
-          ]);
-          setEntries(list.entries || []);
-          setGraph(g);
-          setOverview(o);
-        }, []);
-        const refresh = useCallback(async (prefer) => {
-          setBusy("\u8BFB\u53D6");
-          setError("");
-          try {
-            const payload = await requestJson(`${API}/wiki/repos`);
-            const list = payload.repos || [];
-            setRepos(list);
-            const next = prefer && list.includes(prefer) ? prefer : repo && list.includes(repo) ? repo : list[0] || "";
-            setRepo(next);
-            await loadRepo(next);
-          } catch (e) {
-            setError(e.message);
-          } finally {
-            setBusy("");
-          }
-        }, [loadRepo, repo]);
-        useEffect(() => {
-          refresh("");
-        }, []);
-        const post = useCallback(async (endpoint, payload, label) => {
-          setBusy(label);
-          setError("");
-          setNotice("");
-          try {
-            const out = await requestJson(`${API}${endpoint}`, {
-              method: "POST",
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify(payload)
-            });
-            if (out.added) {
-              setNotice(`${label}\u5B8C\u6210\uFF1A\u65B0\u589E ${out.added.length} / \u53D8\u66F4 ${out.changed?.length ?? 0} / \u4FDD\u7559 ${out.preserved?.length ?? 0} / \u526A\u9664 ${out.pruned?.length ?? 0}${out.pruneSkipped ? `\uFF08${out.pruneSkipped}\uFF09` : ""}`);
-            } else if (typeof out.count === "number") {
-              setNotice(`${label}\u5B8C\u6210\uFF1A\u5199\u5165 ${out.count} \u9875 / \u8DF3\u8FC7 ${out.skipped ?? 0} \u9875\u5DF2\u5B58\u5728${out.index ? "\uFF1BINDEX.md \u5DF2\u5237\u65B0" : ""}`);
-            } else {
-              setNotice(`${label}\u5B8C\u6210`);
-            }
-            await refresh(out.repo || preferName(payload));
-          } catch (e) {
-            setError(e.message);
-          } finally {
-            setBusy("");
-          }
-        }, [refresh]);
-        function preferName(payload) {
-          const raw = String(payload?.repoName || payload?.repoPath || "").replace(/[/\\]+$/, "");
-          return raw.split(/[/\\]/).pop() || "";
-        }
-        const wikiNodes = useMemo(() => {
-          if (!graph || !graph.nodes) return null;
-          const callers = graph.callers || {};
-          const outs = /* @__PURE__ */ new Map();
-          for (const edge of graph.edges || []) outs.set(edge.from, (outs.get(edge.from) || 0) + 1);
-          const nodes = graph.nodes.map((node) => {
-            const inbound = callers[node.path] || 0;
-            const outbound = outs.get(node.path) || 0;
-            return {
-              path: node.path,
-              rel: node.rel,
-              title: node.title || node.path,
-              group: String(node.path).split("/").slice(0, -1).join("/") || "\uFF08\u6839\uFF09",
-              in: inbound,
-              out: outbound,
-              degree: inbound + outbound,
-              symbols: (node.symbols || []).length
-            };
-          }).sort((a, b) => b.degree - a.degree || a.path.localeCompare(b.path));
-          return {
-            nodes,
-            edges: (graph.edges || []).map((edge) => ({ from: edge.from, to: edge.to })),
-            nodeCount: nodes.length,
-            edgeCount: (graph.edges || []).length,
-            isolated: nodes.filter((node) => node.degree === 0).length
-          };
-        }, [graph]);
-        const skeletonPages = entries.filter((entry) => (entry.analysisLevel ?? "skeleton") === "skeleton").length;
-        const levelBadge = { skeleton: "\u9AA8\u67B6", ai: "AI", manual: "\u4EBA\u5DE5" };
-        const overviewLines = String(overview?.body || "").split("\n").slice(0, 26).join("\n");
-        return React.createElement(
-          React.Fragment,
-          null,
-          React.createElement(
-            "div",
-            { className: "_kb_kbhead" },
-            React.createElement("span", null, `\u4EE3\u7801\u4ED3\u5E93${repo ? ` \xB7 ${repo}` : ""}`),
-            React.createElement("button", { type: "button", disabled: Boolean(busy), onClick: () => refresh(repo) }, busy || "\u5237\u65B0")
-          ),
-          error && React.createElement("div", { className: "_kb_error" }, error),
-          notice && React.createElement("div", { className: "_kb_hint" }, notice),
-          React.createElement(
-            "div",
-            { className: "_kb_insightbox" },
-            React.createElement("div", { className: "_kb_sectionlabel" }, "\u626B\u63CF / \u540C\u6B65\u672C\u5730\u4ED3\u5E93"),
-            React.createElement(
-              "div",
-              { className: "_kb_wikiform" },
-              React.createElement("input", {
-                className: "_kb_wikiinput",
-                value: form.repoPath,
-                placeholder: "\u4ED3\u5E93\u7EDD\u5BF9\u8DEF\u5F84\uFF0C\u5982 D:\\code\\my-repo",
-                onChange: (event) => setForm({ ...form, repoPath: event.target.value })
-              }),
-              React.createElement("input", {
-                className: "_kb_wikiinput",
-                value: form.repoName,
-                placeholder: "\u4ED3\u5E93\u540D\uFF08\u9ED8\u8BA4\u53D6\u76EE\u5F55\u540D\uFF1B\u540C\u65F6\u662F vault \u91CC\u7684\u9879\u76EE\u540D\uFF09",
-                onChange: (event) => setForm({ ...form, repoName: event.target.value })
-              }),
-              React.createElement("input", {
-                className: "_kb_wikiinput",
-                value: form.maxFiles,
-                placeholder: "\u6700\u591A\u6587\u4EF6\u6570\uFF08\u9ED8\u8BA4 40\uFF09",
-                onChange: (event) => setForm({ ...form, maxFiles: event.target.value })
-              }),
-              React.createElement(
-                "div",
-                { className: "_kb_inboxactions" },
-                React.createElement("button", {
-                  type: "button",
-                  disabled: Boolean(busy) || !form.repoPath.trim(),
-                  title: "\u4E3A\u4ED3\u5E93\u91CC\u6BCF\u4E2A\u6E90\u6587\u4EF6\u751F\u6210\u4E00\u5F20 Wiki \u9AA8\u67B6\u5361\uFF08\u539F\u5730\u5199\u8FDB vault\uFF09",
-                  onClick: () => post("/wiki/scan", { repoPath: form.repoPath.trim(), repoName: form.repoName.trim(), maxFiles: Number(form.maxFiles) || void 0 }, "\u626B\u63CF")
-                }, "\u626B\u63CF\u4ED3\u5E93"),
-                React.createElement("button", {
-                  type: "button",
-                  disabled: Boolean(busy) || !form.repoPath.trim() || !repos.length,
-                  title: "\u4EE5\u78C1\u76D8\u4E3A\u51C6\u53CC\u5411\u5BF9\u8D26\uFF1A\u65B0\u589E/\u53D8\u66F4/\u526A\u9664\u5B64\u513F\uFF08\u5DF2\u8BED\u4E49\u56DE\u586B\u7684\u9875\u53D7\u4FDD\u62A4\uFF09",
-                  onClick: () => post("/wiki/sync", { repoPath: form.repoPath.trim(), repoName: form.repoName.trim() || repo, maxFiles: Number(form.maxFiles) || void 0 }, "\u540C\u6B65")
-                }, "\u540C\u6B65")
-              ),
-              React.createElement("div", { className: "_kb_hint" }, "\u626B\u63CF/\u540C\u6B65\u4F1A\u76F4\u63A5\u5728 vault \u91CC\u5EFA\u6216\u6539 wiki \u9875\uFF08\u4F60\u7684\u70B9\u51FB\u5373\u540C\u610F\uFF09\u3002\u300CAI \u51DD\u7EC3\u300D\u7531 agent \u8BFB\u9AA8\u67B6\u540E\u7528 kb_wiki_upsert \u56DE\u586B\u3002")
-            )
-          ),
-          repos.length > 0 && React.createElement(
-            "div",
-            { className: "_kb_insightbox" },
-            React.createElement("div", { className: "_kb_sectionlabel" }, `\u5DF2\u6536\u5F55\u4ED3\u5E93\uFF08${repos.length}\uFF09`),
-            React.createElement(
-              "div",
-              { className: "_kb_tags" },
-              repos.map((name2) => React.createElement("button", {
-                key: name2,
-                type: "button",
-                className: "_kb_tag",
-                "data-active": name2 === repo,
-                onClick: () => {
-                  setRepo(name2);
-                  loadRepo(name2).catch((e) => setError(e.message));
-                }
-              }, name2))
-            )
-          ),
-          repo && React.createElement(
-            "div",
-            { className: "_kb_insightbox" },
-            React.createElement(
-              "div",
-              { className: "_kb_sectionlabel" },
-              `\u9875\u9762 ${entries.length}${skeletonPages ? ` \xB7 \u5F85\u51DD\u7EC3 ${skeletonPages}` : ""}`
-            ),
-            skeletonPages > 0 && React.createElement(
-              "div",
-              { className: "_kb_hint" },
-              `\u8FD8\u6709 ${skeletonPages} \u9875\u662F\u9AA8\u67B6 \u2014\u2014 \u8BA9 agent \u8BFB\u5B8C\u540E\u7528 kb_wiki_upsert \u56DE\u586B\u8BED\u4E49\u63CF\u8FF0\u3002`
-            ),
-            entries.slice(0, 40).map((entry, i) => React.createElement(
-              "button",
-              {
-                key: entry.rel || i,
-                type: "button",
-                className: "_kb_kbrow",
-                title: entry.rel,
-                onClick: () => onOpen({ path: entry.rel, name: entry.title || entry.path || entry.rel })
-              },
-              React.createElement(
-                "span",
-                { className: "_kb_kbrowtitle" },
-                entry.title || entry.path || entry.rel,
-                React.createElement("span", { className: "_kb_badge", "data-origin": "local" }, levelBadge[entry.analysisLevel] || entry.analysisLevel || "\u9AA8\u67B6")
-              ),
-              React.createElement("span", { className: "_kb_kbrowmeta" }, entry.path || entry.rel)
-            ))
-          ),
-          wikiNodes && wikiNodes.nodeCount > 0 && React.createElement(
-            "div",
-            { className: "_kb_insightbox" },
-            React.createElement(
-              "div",
-              { className: "_kb_sectionlabel" },
-              `\u4F9D\u8D56\u56FE \xB7 ${wikiNodes.nodeCount} \u6A21\u5757 / ${wikiNodes.edgeCount} \u6761 import \u8FB9 / ${wikiNodes.isolated} \u5B64\u7ACB`
-            ),
-            React.createElement(GraphView, { graph: wikiNodes, onOpen: (target) => onOpen({ path: target.rel || target.path, name: target.name }) })
-          ),
-          repo && React.createElement(
-            "div",
-            { className: "_kb_insightbox" },
-            React.createElement("div", { className: "_kb_sectionlabel" }, "\u9879\u76EE\u6982\u89C8"),
-            React.createElement(
-              "div",
-              { className: "_kb_inboxactions" },
-              React.createElement("button", {
-                type: "button",
-                disabled: Boolean(busy),
-                title: "\u91CD\u65B0\u751F\u6210 <repo>/project-overview.md\uFF08\u4F53\u91CF/\u76EE\u5F55/\u8BED\u8A00/\u6838\u5FC3\u6A21\u5757/\u9875\u9762\u6E05\u5355\uFF09",
-                onClick: () => post("/wiki/overview", { repo }, "\u6982\u89C8")
-              }, "\u5237\u65B0\u6982\u89C8")
-            ),
-            overviewLines ? React.createElement("pre", { className: "_kb_wikibody" }, overviewLines) : React.createElement("div", { className: "_kb_hint" }, "\u8FD8\u6CA1\u6709\u6982\u89C8\u9875\uFF0C\u70B9\u300C\u5237\u65B0\u6982\u89C8\u300D\u751F\u6210\u3002")
-          )
-        );
-      }
       function Workbench({ onClose, sessions, workspaces, modelDirectories }) {
         const [meta2, setMeta] = useState(null);
         const [metaError, setMetaError] = useState("");
@@ -26680,7 +26337,7 @@ ${node.path}
         const [searchResults, setSearchResults] = useState(null);
         const [searching, setSearching] = useState(false);
         const [lastDelete, setLastDelete] = useState(null);
-        const [leftView, setLeftView] = useState("files");
+        const [leftView, setLeftView] = useState("knowledge");
         const [kbQuery, setKbQuery] = useState("");
         const rootRef = useRef(null);
         const saveTimerRef = useRef(null);
@@ -26772,320 +26429,17 @@ ${node.path}
           setSearchResults(null);
           await openFile(entry);
         };
-        const save = async ({ auto = false } = {}) => {
-          if (!note?.path || note.image || note.content === editor) return true;
-          if (savePromiseRef.current) return savePromiseRef.current;
-          const path = note.path;
-          const content2 = editor;
-          const run = (async () => {
-            setSaving(true);
-            setStatus(auto ? "\u81EA\u52A8\u4FDD\u5B58\u4E2D\u2026" : "\u4FDD\u5B58\u4E2D\u2026");
-            try {
-              const payload = await requestJson(`${API}/save`, {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ path, content: content2 })
-              });
-              setNote((value) => value?.path === path ? { ...value, content: content2, modifiedAt: payload.modifiedAt } : value);
-              setStatus(auto ? "\u5DF2\u81EA\u52A8\u4FDD\u5B58" : "\u5DF2\u4FDD\u5B58");
-              return true;
-            } catch (e) {
-              setStatus(e.message);
-              return false;
-            } finally {
-              setSaving(false);
-            }
-          })();
-          savePromiseRef.current = run;
-          try {
-            return await run;
-          } finally {
-            if (savePromiseRef.current === run) savePromiseRef.current = null;
-          }
+        const save = async () => {
+          if (note?.path && note.content !== editor) setStatus("\u6B64\u9762\u677F\u53EA\u8BFB\uFF1B\u8BF7\u901A\u8FC7 Obsidian MCP \u4FEE\u6539\u7B14\u8BB0\u3002");
+          return true;
         };
         saveRef.current = save;
-        useEffect(() => {
-          if (saveTimerRef.current !== null) window.clearTimeout(saveTimerRef.current);
-          if (!note || note.image || note.content === editor) return void 0;
-          saveTimerRef.current = window.setTimeout(() => {
-            saveRef.current?.({ auto: true });
-          }, 800);
-          return () => {
-            if (saveTimerRef.current !== null) window.clearTimeout(saveTimerRef.current);
-            saveTimerRef.current = null;
-          };
-        }, [editor, note?.path, note?.content, note?.image]);
-        const refreshTree = () => setTreeRevision((value) => value + 1);
-        const newItemParent = () => {
-          if (focusedFolder) return focusedFolder;
-          const slash3 = selected.lastIndexOf("/");
-          return slash3 === -1 ? "" : selected.slice(0, slash3);
-        };
-        const parentForEntry = (entry) => {
-          if (!entry) return newItemParent();
-          if (entry.kind === "directory") return entry.path;
-          const slash3 = entry.path.lastIndexOf("/");
-          return slash3 === -1 ? "" : entry.path.slice(0, slash3);
-        };
-        const openNameDialog = (kind, parent) => {
-          setContextMenu(null);
-          setNameValue(kind === "folder" ? "\u65B0\u6587\u4EF6\u5939" : "\u672A\u547D\u540D\u7B14\u8BB0");
-          setNameDialog({ kind, parent });
-        };
-        const createFolderAt = async (parent, name2) => {
-          if (!name2) return;
-          const saved = await saveRef.current?.();
-          if (saved === false) return;
-          setTreeActionError("");
-          try {
-            const payload = await requestJson(`${API}/create-folder`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ parent, name: name2 })
-            });
-            setFocusedFolder(payload.path);
-            refreshTree();
-            setStatus("\u6587\u4EF6\u5939\u5DF2\u521B\u5EFA");
-          } catch (e) {
-            setTreeActionError(e.message);
-            setStatus(e.message);
-          }
-        };
-        const createNoteAt = async (parent, name2) => {
-          if (!name2) return;
-          const saved = await saveRef.current?.();
-          if (saved === false) return;
-          setTreeActionError("");
-          try {
-            const payload = await requestJson(`${API}/create-note`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ parent, name: name2, content: "" })
-            });
-            refreshTree();
-            setStatus("\u7B14\u8BB0\u5DF2\u521B\u5EFA");
-            await openFile({ path: payload.path, name: payload.name, kind: "file" });
-          } catch (e) {
-            setTreeActionError(e.message);
-            setStatus(e.message);
-          }
-        };
-        const submitName = async (event) => {
-          event.preventDefault();
-          const name2 = nameValue.trim();
-          if (!name2 || !nameDialog) return;
-          const dialog = nameDialog;
-          setNameDialog(null);
-          if (dialog.kind === "folder") await createFolderAt(dialog.parent, name2);
-          else if (dialog.kind === "note") await createNoteAt(dialog.parent, name2);
-          else await renameEntry(dialog.entry, name2);
-        };
-        const openRenameDialog = (entry) => {
-          setContextMenu(null);
-          setNameValue(entry.name);
-          setNameDialog({ kind: "rename", entry });
-        };
-        const beginTitleEdit = () => {
-          if (!note || note.image) return;
-          titleEditingRef.current = true;
-          setTitleValue(note.name || "");
-          setTitleEditing(true);
-        };
-        const renameEntry = async (entry, name2) => {
-          if (!entry || !name2) return;
-          const saved = await saveRef.current?.();
-          if (saved === false) return;
-          setTreeActionError("");
-          try {
-            const payload = await requestJson(`${API}/rename`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ path: entry.path, name: name2 })
-            });
-            const source = entry.path;
-            const nextPath = (value) => {
-              if (!value) return value;
-              if (value === source) return payload.path;
-              return value.startsWith(`${source}/`) ? `${payload.path}${value.slice(source.length)}` : value;
-            };
-            setSelected(nextPath);
-            setFocusedFolder((value) => nextPath(value));
-            setNote((value) => value?.path ? { ...value, path: nextPath(value.path), name: value.path === source ? payload.name : value.name } : value);
-            refreshTree();
-            setStatus("\u5DF2\u91CD\u547D\u540D");
-          } catch (e) {
-            setTreeActionError(e.message);
-            setStatus(e.message);
-          }
-        };
-        const finishTitleEdit = async (cancel = false) => {
-          if (!titleEditingRef.current) return;
-          titleEditingRef.current = false;
-          setTitleEditing(false);
-          const currentNote = note;
-          const nextName = titleValue.trim();
-          if (cancel || !currentNote || currentNote.image || !nextName || nextName === currentNote.name) {
-            if (!cancel && currentNote) setTitleValue(currentNote.name || "");
-            return;
-          }
-          await renameEntry(currentNote, nextName);
-        };
-        const askDelete = (entry) => {
-          setContextMenu(null);
-          setDeleteDialog(entry);
-        };
-        const deleteEntry = async (entry) => {
-          if (!entry) return;
-          const saved = await saveRef.current?.();
-          if (saved === false) return;
-          setTreeActionError("");
-          try {
-            const payload = await requestJson(`${API}/delete`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ path: entry.path })
-            });
-            const deletedPath = entry.path;
-            if (selected === deletedPath || selected.startsWith(`${deletedPath}/`)) {
-              setSelected("");
-              setNote(null);
-              setEditor("");
-            }
-            setLastDelete({ id: payload.undoId, name: entry.name });
-            if (focusedFolder === deletedPath || focusedFolder.startsWith(`${deletedPath}/`)) setFocusedFolder("");
-            refreshTree();
-            setStatus("\u5DF2\u5220\u9664");
-          } catch (e) {
-            setTreeActionError(e.message);
-            setStatus(e.message);
-          }
-        };
-        const undoDelete = async () => {
-          if (!lastDelete?.id) return;
-          setTreeActionError("");
-          try {
-            await requestJson(`${API}/undo-delete`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ id: lastDelete.id })
-            });
-            setLastDelete(null);
-            refreshTree();
-            setStatus("\u5DF2\u64A4\u9500\u5220\u9664");
-          } catch (e) {
-            setTreeActionError(e.message);
-            setStatus(e.message);
-          }
-        };
-        const confirmDelete = async () => {
-          const target = deleteDialog;
-          setDeleteDialog(null);
-          await deleteEntry(target);
-        };
-        const openContextMenu = (event, entry = null) => {
-          event.preventDefault();
-          event.stopPropagation();
-          if (entry?.kind === "directory") setFocusedFolder(entry.path);
-          const width = 220;
-          const height = entry ? 300 : 100;
-          setContextMenu({
-            x: Math.max(8, Math.min(event.clientX, window.innerWidth - width - 8)),
-            y: Math.max(8, Math.min(event.clientY, window.innerHeight - height - 8)),
-            entry,
-            parent: parentForEntry(entry)
-          });
-        };
-        const closeContextMenuOutside = (event) => {
-          if (contextMenu && !event.target.closest?.("._kb_contextmenu")) setContextMenu(null);
-        };
-        const startMove = (entry) => {
-          setTreeActionError("");
-          setContextMenu(null);
-          setMoving({ entry });
-          setDropTargetPath("");
-          setStatus(`\u6B63\u5728\u79FB\u52A8\u300C${entry.name}\u300D\uFF0C\u8BF7\u9009\u62E9\u76EE\u6807\u6587\u4EF6\u5939`);
-        };
-        const addToChat = async (entry) => {
-          setContextMenu(null);
-          if (!entry?.path) return;
-          if (await saveRef.current?.() === false) return;
-          try {
-            setStatus(`\u6B63\u5728\u6574\u7406\u300C${entry.name}\u300D\u7684\u4E0A\u4E0B\u6587\u2026`);
-            const payload = await requestJson(`${API}/context?path=${encodeURIComponent(entry.path)}`);
-            const suffix = payload.truncated ? "\uFF08\u5185\u5BB9\u8F83\u591A\uFF0C\u5DF2\u622A\u53D6\u524D\u4E00\u90E8\u5206\uFF09" : "";
-            setChatInsertRequest({
-              id: Date.now(),
-              name: entry.name,
-              path: payload.path || entry.path,
-              kind: payload.kind || entry.kind,
-              content: payload.content,
-              truncated: payload.truncated,
-              fileCount: payload.files?.length || 0
-            });
-            setStatus(`\u5DF2\u52A0\u5165\u5BF9\u8BDD\uFF1A${entry.name}${suffix}`);
-          } catch (error) {
-            setTreeActionError(error.message);
-            setStatus(error.message);
-          }
-        };
-        const cancelMove = () => {
-          setMoving(null);
-          setDropTargetPath("");
-          setStatus("\u5DF2\u53D6\u6D88\u79FB\u52A8");
-        };
-        const hoverMoveTarget = (entry) => {
-          if (!moving?.entry) return;
-          if (moving.entry.path === entry.path) {
-            setDropTargetPath("");
-            return;
-          }
-          setDropTargetPath(entry.path);
-          setStatus(`\u79FB\u52A8\u300C${moving.entry.name}\u300D\u5230\u300C${entry.name}\u300D`);
-        };
-        const moveTo = async (destination) => {
-          if (!moving?.entry) return;
-          if (await saveRef.current?.() === false) return;
-          const source = moving.entry.path;
-          const destinationPath = typeof destination === "string" ? destination : destination?.path || "";
-          setTreeActionError("");
-          try {
-            const payload = await requestJson(`${API}/move`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ source, destination: destinationPath })
-            });
-            const nextPath = (value) => {
-              if (!value) return value;
-              if (value === source) return payload.path;
-              return value.startsWith(`${source}/`) ? `${payload.path}${value.slice(source.length)}` : value;
-            };
-            setSelected(nextPath);
-            setNote((value) => value?.path ? { ...value, path: nextPath(value.path) } : value);
-            setMoving(null);
-            setDropTargetPath("");
-            refreshTree();
-            setStatus("\u5DF2\u79FB\u52A8");
-          } catch (e) {
-            setTreeActionError(e.message);
-            setStatus(e.message);
-          }
-        };
-        const closeWorkbench = async () => {
-          if (await saveRef.current?.() === false) return;
-          onClose();
-        };
+        const closeWorkbench = () => onClose();
         const onKeyDown = (event) => {
-          if (event.key === "Escape") {
-            if (deleteDialog) setDeleteDialog(null);
-            else if (nameDialog) setNameDialog(null);
-            else if (contextMenu) setContextMenu(null);
-            else if (moving) cancelMove();
-            else closeWorkbench();
-            return;
-          }
+          if (event.key === "Escape") closeWorkbench();
           if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
             event.preventDefault();
-            save({ auto: false });
+            setStatus("\u6B64\u9762\u677F\u53EA\u8BFB\uFF1B\u8BF7\u901A\u8FC7 Obsidian MCP \u4FEE\u6539\u7B14\u8BB0\u3002");
           }
         };
         const vaultName = meta2?.vault?.name || "Obsidian";
@@ -27096,7 +26450,6 @@ ${node.path}
             ref: rootRef,
             tabIndex: -1,
             onKeyDown,
-            onPointerDown: closeContextMenuOutside,
             style: { paddingTop: `${TITLEBAR_INSET}px`, gridTemplateColumns: `${widths.left}px 1px minmax(360px, 1fr) 1px ${widths.right}px` }
           },
           React.createElement(
@@ -27112,23 +26465,16 @@ ${node.path}
                 React.createElement("strong", null, vaultName),
                 React.createElement("span", null, meta2?.vault?.path || "\u6B63\u5728\u8BFB\u53D6\u4ED3\u5E93\u8DEF\u5F84\u2026")
               ),
-              React.createElement("button", { className: "_kb_iconbtn", type: "button", title: "\u5173\u95ED\u5DE5\u4F5C\u53F0", onClick: closeWorkbench }, "\xD7")
+              React.createElement("button", { className: "_kb_iconbtn", type: "button", title: "\u5173\u95ED\u77E5\u8BC6\u9762\u677F", onClick: closeWorkbench }, "\xD7")
             ),
             React.createElement(
               "div",
-              { className: "_kb_leftbody", onContextMenu: (event) => openContextMenu(event, null) },
+              { className: "_kb_leftbody" },
               React.createElement(
                 "div",
                 { className: "_kb_switch" },
-                React.createElement("button", { className: "_kb_switchbtn", type: "button", "data-active": leftView === "files", onClick: () => setLeftView("files") }, "\u6587\u4EF6"),
                 React.createElement("button", { className: "_kb_switchbtn", type: "button", "data-active": leftView === "knowledge", onClick: () => setLeftView("knowledge") }, "\u77E5\u8BC6"),
-                React.createElement("button", { className: "_kb_switchbtn", type: "button", "data-active": leftView === "insight", onClick: () => setLeftView("insight") }, "\u6D1E\u5BDF"),
-                React.createElement("button", { className: "_kb_switchbtn", type: "button", "data-active": leftView === "code", onClick: () => setLeftView("code") }, "\u4EE3\u7801")
-              ),
-              leftView === "code" && React.createElement(
-                PanelBoundary,
-                { label: "\u4EE3\u7801" },
-                React.createElement(WikiPanel, { onOpen: openFile })
+                React.createElement("button", { className: "_kb_switchbtn", type: "button", "data-active": leftView === "insight", onClick: () => setLeftView("insight") }, "\u6D1E\u5BDF")
               ),
               leftView === "knowledge" && React.createElement(
                 PanelBoundary,
@@ -27146,45 +26492,9 @@ ${node.path}
                     setLeftView("knowledge");
                   }
                 })
-              ),
-              leftView === "files" && React.createElement(
-                "div",
-                { className: "_kb_sectionhead" },
-                React.createElement("div", { className: "_kb_sectionlabel" }, "\u4ED3\u5E93")
-              ),
-              leftView === "files" && React.createElement(
-                "div",
-                { className: "_kb_searchbar" },
-                React.createElement("input", { className: "_kb_searchinput", value: searchQuery, onChange: (event) => setSearchQuery(event.target.value), placeholder: "\u641C\u7D22\u4ED3\u5E93\u2026", "aria-label": "\u641C\u7D22\u4ED3\u5E93" }),
-                searchQuery && React.createElement("button", { className: "_kb_searchclear", type: "button", onClick: () => setSearchQuery(""), "aria-label": "\u6E05\u9664\u641C\u7D22" }, "\xD7")
-              ),
-              leftView === "files" && lastDelete && React.createElement(
-                "div",
-                { className: "_kb_undobar" },
-                React.createElement("span", null, `\u5DF2\u79FB\u5230\u56DE\u6536\u7AD9\uFF1A${lastDelete.name}`),
-                React.createElement("button", { className: "_kb_undobutton", type: "button", onClick: undoDelete }, "\u64A4\u9500")
-              ),
-              leftView === "files" && moving && React.createElement(
-                "div",
-                { className: "_kb_movebar", "data-dragging": Boolean(dropTargetPath) },
-                React.createElement(
-                  "div",
-                  { className: "_kb_moveinfo" },
-                  React.createElement("strong", null, `\u79FB\u52A8\uFF1A${moving.entry.name}`),
-                  React.createElement("span", null, dropTargetPath ? `\u653E\u5165\u300C${dropTargetPath.split("/").pop()}\u300D` : "\u6309\u4F4F\u62D6\u5230\u76EE\u6807\u6587\u4EF6\u5939")
-                ),
-                React.createElement("button", { className: "_kb_moveaction", type: "button", onClick: () => moveTo("") }, "\u79FB\u5230\u6839\u76EE\u5F55"),
-                React.createElement("button", { className: "_kb_moveaction", type: "button", onClick: cancelMove }, "\u53D6\u6D88")
-              ),
-              leftView === "files" && treeActionError && React.createElement("div", { className: "_kb_error" }, treeActionError),
-              leftView === "files" && React.createElement(
-                PanelBoundary,
-                { label: "\u6587\u4EF6" },
-                metaError ? React.createElement("div", { className: "_kb_error" }, metaError) : !meta2?.configured ? React.createElement("div", { className: "_kb_hint" }, "\u6CA1\u6709\u627E\u5230\u672C\u673A Obsidian \u4ED3\u5E93\u3002\u53EF\u4EE5\u901A\u8FC7 OBSIDIAN_VAULT_PATH \u6307\u5B9A\u8DEF\u5F84\u3002") : searchQuery.trim() ? React.createElement(SearchResults, { payload: searchResults, loading: searching, onOpen: openSearchResult }) : React.createElement(VaultTree, { selected, onOpen: openFile, revision: treeRevision, movingEntry: moving?.entry, dropTargetPath, onMoveStart: startMove, onMoveTarget: moveTo, onMoveHover: hoverMoveTarget, onMoveCancel: cancelMove, onFolderFocus: setFocusedFolder, onContextMenu: openContextMenu })
               )
             )
           ),
-          React.createElement(ResizeHandle, { side: "left", dragging: drag?.side === "left", onPointerDown: startResize }),
           React.createElement(
             "main",
             { className: "_kb_center" },
@@ -27192,28 +26502,7 @@ ${node.path}
               "div",
               { className: "_kb_editorbar" },
               React.createElement("span", { className: "_kb_fileicon" }, note?.image ? "\u25A7" : "\u2726"),
-              titleEditing ? React.createElement("input", {
-                className: "_kb_filename _kb_titleinput",
-                ref: titleInputRef,
-                value: titleValue,
-                onChange: (event) => setTitleValue(event.target.value),
-                onBlur: () => finishTitleEdit(),
-                onKeyDown: (event) => {
-                  if (event.key === "Escape") {
-                    event.preventDefault();
-                    finishTitleEdit(true);
-                  } else if (event.key === "Enter") {
-                    event.preventDefault();
-                    event.currentTarget.blur();
-                  }
-                },
-                "aria-label": "\u4FEE\u6539\u7B14\u8BB0\u540D\u79F0"
-              }) : note && !note.image ? React.createElement("button", {
-                className: "_kb_filename _kb_titlebutton",
-                type: "button",
-                onClick: beginTitleEdit,
-                title: "\u70B9\u51FB\u4FEE\u6539\u7B14\u8BB0\u540D\u79F0"
-              }, note.name) : React.createElement("span", { className: "_kb_filename" }, note?.name || "\u9009\u62E9\u4E00\u7BC7\u7B14\u8BB0")
+              React.createElement("span", { className: "_kb_filename" }, note?.name || "\u9009\u62E9\u4E00\u7BC7\u7B14\u8BB0")
             ),
             React.createElement(
               "div",
@@ -27225,69 +26514,10 @@ ${node.path}
             ),
             React.createElement("div", { className: "_kb_status" }, React.createElement("span", null, status), React.createElement("span", null, note?.path || ""))
           ),
-          React.createElement(ResizeHandle, { side: "right", dragging: drag?.side === "right", onPointerDown: startResize }),
-          React.createElement(ChatPanel, { sessions, workspaces, modelDirectories, notePath: note?.path, noteContent: note?.image ? null : editor, insertRequest: chatInsertRequest }),
-          contextMenu && React.createElement(
-            "div",
-            {
-              className: "_kb_contextmenu",
-              style: { left: contextMenu.x, top: contextMenu.y },
-              onPointerDown: (event) => event.stopPropagation(),
-              onClick: (event) => event.stopPropagation(),
-              onContextMenu: (event) => event.preventDefault()
-            },
-            React.createElement("button", { className: "_kb_contextitem", type: "button", onClick: () => openNameDialog("note", contextMenu.parent) }, "\u65B0\u5EFA\u7B14\u8BB0"),
-            React.createElement("button", { className: "_kb_contextitem", type: "button", onClick: () => openNameDialog("folder", contextMenu.parent) }, "\u65B0\u5EFA\u6587\u4EF6\u5939"),
-            contextMenu.entry && React.createElement("div", { className: "_kb_contextsep" }),
-            contextMenu.entry && React.createElement("button", { className: "_kb_contextitem", type: "button", onClick: () => addToChat(contextMenu.entry) }, "\u52A0\u5165\u5BF9\u8BDD"),
-            contextMenu.entry && React.createElement("div", { className: "_kb_contextsep" }),
-            contextMenu.entry && React.createElement("button", { className: "_kb_contextitem", type: "button", onClick: () => startMove(contextMenu.entry) }, "\u79FB\u52A8\u5230\u2026"),
-            React.createElement("div", { className: "_kb_contextsep" }),
-            contextMenu.entry && React.createElement("button", { className: "_kb_contextitem", type: "button", onClick: () => openRenameDialog(contextMenu.entry) }, "\u91CD\u547D\u540D"),
-            contextMenu.entry && React.createElement("button", { className: "_kb_contextitem", "data-danger": true, type: "button", onClick: () => askDelete(contextMenu.entry) }, "\u5220\u9664")
-          ),
-          nameDialog && React.createElement(
-            "div",
-            { className: "_kb_dialogbackdrop", onPointerDown: () => setNameDialog(null) },
-            React.createElement(
-              "form",
-              { className: "_kb_dialog", onSubmit: submitName, onPointerDown: (event) => event.stopPropagation() },
-              React.createElement("div", { className: "_kb_dialogtitle" }, nameDialog.kind === "folder" ? "\u65B0\u5EFA\u6587\u4EF6\u5939" : nameDialog.kind === "note" ? "\u65B0\u5EFA\u7B14\u8BB0" : "\u91CD\u547D\u540D"),
-              React.createElement("input", {
-                className: "_kb_dialoginput",
-                autoFocus: true,
-                value: nameValue,
-                onChange: (event) => setNameValue(event.target.value),
-                onKeyDown: (event) => {
-                  if (event.key === "Escape") {
-                    event.preventDefault();
-                    setNameDialog(null);
-                  }
-                }
-              }),
-              React.createElement(
-                "div",
-                { className: "_kb_dialogactions" },
-                React.createElement("button", { className: "_kb_dialogbutton", type: "button", onClick: () => setNameDialog(null) }, "\u53D6\u6D88"),
-                React.createElement("button", { className: "_kb_dialogbutton", type: "submit", "data-primary": true }, "\u521B\u5EFA")
-              )
-            )
-          ),
-          deleteDialog && React.createElement(
-            "div",
-            { className: "_kb_dialogbackdrop", onPointerDown: () => setDeleteDialog(null) },
-            React.createElement(
-              "div",
-              { className: "_kb_dialog", onPointerDown: (event) => event.stopPropagation() },
-              React.createElement("div", { className: "_kb_dialogtitle" }, `\u5220\u9664\u300C${deleteDialog.name}\u300D\uFF1F`),
-              React.createElement("div", { className: "_kb_dialogcopy" }, deleteDialog.kind === "directory" ? "\u6587\u4EF6\u5939\u4E2D\u7684\u5185\u5BB9\u4F1A\u4E00\u8D77\u79FB\u5165\u56DE\u6536\u7AD9\uFF0C\u53EF\u5728\u5220\u9664\u540E\u7ACB\u5373\u64A4\u9500\u3002" : "\u6587\u4EF6\u4F1A\u79FB\u5165\u56DE\u6536\u7AD9\uFF0C\u53EF\u5728\u5220\u9664\u540E\u7ACB\u5373\u64A4\u9500\u3002"),
-              React.createElement(
-                "div",
-                { className: "_kb_dialogactions" },
-                React.createElement("button", { className: "_kb_dialogbutton", type: "button", onClick: () => setDeleteDialog(null) }, "\u53D6\u6D88"),
-                React.createElement("button", { className: "_kb_dialogbutton", "data-danger": true, type: "button", onClick: confirmDelete }, "\u5220\u9664")
-              )
-            )
+          React.createElement(
+            "aside",
+            { className: "_kb_right" },
+            React.createElement(ChatPanel, { sessions, workspaces, modelDirectories, notePath: note?.path, noteContent: note?.image ? null : editor, insertRequest: chatInsertRequest })
           )
         );
       }

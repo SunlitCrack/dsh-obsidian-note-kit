@@ -20,22 +20,76 @@ import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 const REAL = process.argv.includes('--readonly')
-const DSH_APP = process.env.DSH_APP_DIR || 'D:/DSH Desktop/resources/app'
-const validatorPath = `${DSH_APP}/node_modules/@deepseek-ai/dsh-util-values/lib/index.js`
-if (!existsSync(validatorPath)) {
-  console.error(`✗ 找不到宿主校验器: ${validatorPath}（用 DSH_APP_DIR 指定 DSH 安装目录）`)
-  process.exit(1)
-}
-const { snapshotJsonValue } = await import(pathToFileURL(validatorPath).href)
+// 内核根目录：先把 DSH_APP_DIR 当候选，再依次探本机已知的安装目录（见
+// cordis-load.mjs 里的同款候选列表）。硬编码单一目录会在换装路径后一直报错。
+const CANDIDATES = [
+  process.env.DSH_APP_DIR,
+  'D:/DSH Desktop/resources/app',
+  'D:/DeepSeek Harness/resources/app/dsh',
+  'D:/DeepSeek Harness/resources/app',
+].filter(Boolean)
+const validatorOf = (base) => `${base}/node_modules/@deepseek-ai/dsh-util-values/lib/index.js`
+const DSH_APP = CANDIDATES.find((base) => existsSync(validatorOf(base)))
+const validatorPath = DSH_APP ? validatorOf(DSH_APP) : validatorOf(CANDIDATES[0])
 
-// ---- 一次性临时 vault + fixture 仓库（真实模式不建、不写）------------------
+/**
+ * `snapshotJsonValue()` 的等价实现（宿主那份是纯函数，逻辑见 dsh-util-values）。
+ *
+ * 为什么本地复刻：DSH 桌面版把内核打进 `app.asar` 后，普通 Node 进程用 fs /
+ * import 都读不到 asar 内的模块（只有 Electron 打补丁的加载器能读）。这时
+ * 拿不到宿主那份实现，但「无损 JSON」这条约束本身完全可以本地校验。
+ *
+ * 规则（与宿主一致）：
+ *   - `undefined` / 函数 / symbol / bigint → 失败（JSON.stringify 会静默丢掉）
+ *   - `NaN` / `Infinity` → 失败（会序列化成 null）
+ *   - 稀疏数组 / 含上述值的数组 → 失败
+ *   - 循环引用 → 失败
+ *   - 通过则返回深拷贝
+ */
+function localSnapshotJsonValue(value, seen = new Set()) {
+  if (value === undefined) throw new TypeError('contains undefined')
+  if (typeof value === 'function' || typeof value === 'symbol' || typeof value === 'bigint') {
+    throw new TypeError(`contains ${typeof value}`)
+  }
+  if (typeof value === 'number' && !Number.isFinite(value)) throw new TypeError('contains non-finite number')
+  if (value === null || typeof value !== 'object') return value
+  if (seen.has(value)) throw new TypeError('contains circular reference')
+  seen.add(value)
+  try {
+    if (Array.isArray(value)) {
+      for (let i = 0; i < value.length; i += 1) {
+        if (!(i in value)) throw new TypeError('contains sparse array hole')
+        localSnapshotJsonValue(value[i], seen)
+      }
+      return [...value]
+    }
+    const out = {}
+    for (const [k, v] of Object.entries(value)) {
+      if (v === undefined) throw new TypeError(`contains undefined at "${k}"`)
+      out[k] = localSnapshotJsonValue(v, seen)
+    }
+    return out
+  } finally {
+    seen.delete(value)
+  }
+}
+
+let snapshotJsonValue = localSnapshotJsonValue
+if (existsSync(validatorPath)) {
+  ;({ snapshotJsonValue } = await import(pathToFileURL(validatorPath).href))
+  console.log(`宿主校验器：${validatorPath}`)
+} else {
+  // 不硬失败：内核打进 asar 是环境变化，不是代码问题。本地复刻能守住同一条约束。
+  console.log('⚠ 内核已打包进 app.asar，普通 Node 读不到宿主校验器；改用本地等价实现')
+  console.log('  （规则与 dsh-util-values 的 snapshotJsonValue 一致：拒 undefined / NaN / 稀疏数组）')
+}
+
+// ---- 一次性临时 vault（真实模式不建、不写）--------------------------------
 let vault = null
-let repoDir = null
 const proj = 'proj'
-const repo = 'demorepo'
 
 if (REAL) {
-  vault = process.env.OBSIDIAN_VAULT_PATH
+  vault = process.env.OBSIDIAN_VAULT_PATH || 'D:/obsidian-repo'
   if (!existsSync(vault)) {
     console.error(`✗ 找不到真实 vault: ${vault}`)
     process.exit(1)
@@ -43,7 +97,6 @@ if (REAL) {
   console.log(`真实 vault（只读）：${vault}`)
 } else {
   vault = mkdtempSync(path.join(tmpdir(), 'dsh-kb-toolout-vault-'))
-  repoDir = mkdtempSync(path.join(tmpdir(), 'dsh-kb-toolout-repo-'))
   const put = (root, rel, frontmatter, body) => {
     const abs = path.join(root, ...rel.split('/'))
     mkdirSync(path.dirname(abs), { recursive: true })
@@ -51,8 +104,6 @@ if (REAL) {
   }
   put(vault, `${proj}/hub.md`, 'title: 中枢\ntags: [x]\norigin: local', '# 中枢\n\n见 [[leaf]]。')
   put(vault, `${proj}/leaf.md`, 'title: 叶子\ntags: [x, y]', '# 叶子\n\n见 [[hub]]，断链 [[missing-one]]。')
-  put(repoDir, 'src/a.js', '', "import './b.js'\nexport const A = 1\n")
-  put(repoDir, 'src/b.js', '', 'export const B = 2\n')
 }
 
 process.env.OBSIDIAN_VAULT_PATH = vault
@@ -166,117 +217,60 @@ async function run(name, args) {
   return value
 }
 
-// ---- 1. 工具输出必须过宿主校验器 -------------------------------------------
-const snapshot = { format: 'dsh-kb-snapshot', version: 1, notes: [] }
-// 只读计划：真实 vault 模式用（绝不写盘）。
+// ---- 1. Compact read surface and the gap-ledger exception ------------------
 const readPlan = [
-  ['kb_index', {}],
-  ['kb_search', { query: 'elasticsearch' }],
-  ['kb_search', { query: 'elasticsearch', type: 'note' }],
-  ['kb_search', { query: '不存在的词 zzz-not-here' }],
-  ['kb_tagcloud', {}],
-  ['kb_doctor', {}],
-  ['kb_export', {}],
-  ['kb_import', { data: snapshot }],
-  ['kb_gap', { action: 'list' }],
-  ['kb_graph', {}],
-  ['kb_wiki_list', {}],
-]
-// 全量计划：一次性临时 vault，22 个工具全跑（含写入路径）。
-const writePlan = [
-  ['kb_index', {}],
-  ['kb_index', { project: proj, rebuild: true }],
-  ['kb_search', { query: '中枢' }],
-  ['kb_search', { query: '中枢', type: 'note' }],
-  ['kb_search', { query: '不存在的词 zzz' }],
+  ['kb_find', {}],
+  ['kb_find', { project: proj }],
+  ['kb_find', { query: '中枢' }],
+  ['kb_find', { query: '中枢', type: 'note' }],
+  ['kb_find', { query: '不存在的词 zzz-not-here' }],
   ['kb_read', { path: `${proj}/hub.md` }],
-  ['kb_capture', { project: proj, title: '工具输出冒烟', content: '这条用来验证沉淀链路。', tags: ['smoke'] }],
-  ['kb_inbox', { action: 'list' }],
-  ['kb_wiki_ingest', { repoPath: repoDir, repoName: repo, maxFiles: 10 }],
-  ['kb_wiki_list', {}],
-  ['kb_wiki_list', { repo }],
-  ['kb_wiki_graph', { repo }],
-  ['kb_wiki_upsert', { repo, path: 'src/a.js', content: '## 职责\n\nA 模块。\n', title: 'A 模块' }],
-  ['kb_wiki_overview', { repo }],
-  ['kb_wiki_sync', { repoPath: repoDir, repoName: repo, maxFiles: 10 }],
-  ['kb_tagcloud', {}],
-  ['kb_backlinks', { path: `${proj}/hub.md` }],
   ['kb_doctor', {}],
-  ['kb_export', {}],
-  ['kb_import', { data: snapshot }],
-  ['kb_skill_export', { name: 'smoke', refs: [`${proj}/hub.md`] }],
-  ['kb_feedback', { path: `${proj}/leaf.md`, kind: 'confirm', text: '输出冒烟' }],
   ['kb_gap', { action: 'list' }],
 ]
 
 const results = new Map()
-for (const [name, args] of REAL ? readPlan : writePlan) {
+for (const [name, args] of readPlan) {
   const value = await run(name, args)
   if (!results.has(name)) results.set(name, value)
 }
 
-// 真实 vault 模式：用第 1 条命中当 kb_read / kb_backlinks 的输入（真实中文路径）。
 if (REAL) {
-  const hit = results.get('kb_search')?.results?.[0]?.path
-  if (hit) {
-    await run('kb_read', { path: hit, maxChars: 200 })
-    await run('kb_backlinks', { path: hit })
-  } else {
-    check(false, 'kb_search 在真实 vault 上没有命中，无法覆盖 kb_read/kb_backlinks')
-  }
-}
-
-// ---- 2. 依赖上一步结果的工具（缺口 / 图谱 / 自愈）--------------------------
-if (!REAL) {
+  const found = await run('kb_find', { query: 'flood-stage', topK: 3 })
+  const hit = found?.results?.[0]?.path
+  if (hit) await run('kb_read', { path: hit, maxChars: 200 })
+  else check(false, '真实 vault 模式未命中，无法覆盖正文读取')
+} else {
   const added = await run('kb_gap', {
-    action: 'add',
-    project: proj,
-    question: '这条缺口用来验证 kb_gap 输出无损',
-    origin: 'inferred',
+    action: 'add', project: proj, question: '结构化缺口输出验证', origin: 'inferred',
+  })
+  const duplicate = await run('kb_gap', {
+    action: 'add', project: proj, question: '结构化缺口输出验证', origin: 'inferred',
   })
   if (added?.id) {
-    await run('kb_gap', { action: 'resolve', project: proj, id: added.id, note: '输出冒烟' })
-  } else {
-    check(false, `kb_gap add 未返回 id：${JSON.stringify(added)}`)
-  }
-
-  await run('kb_graph', {})
-  await run('kb_reindex', { fixIndexes: true })
-  await run('kb_wiki_delete', { repo, path: 'src/a.js' })
+    check(duplicate.duplicate === true && duplicate.id === added.id, 'kb_gap 重复 add 幂等')
+    await run('kb_gap', { action: 'resolve', project: proj, id: added.id, note: '冒烟完成' })
+  } else check(false, `kb_gap 未返回 id：${JSON.stringify(added)}`)
 }
 
-// ---- 3. 错误路径也必须无损（结构化错误 payload）----------------------------
-{
-  const missing = await run('kb_read', {})
-  check(missing?.ok === false && missing?.error?.code === 'VALIDATION', `缺参错误也是无损 JSON：${missing?.error?.code}`)
+const missing = await run('kb_read', {})
+check(missing?.ok === false && missing?.error?.code === 'VALIDATION', `缺参错误无损：${missing?.error?.code}`)
+const notFound = await run('kb_read', { path: `${proj}/does-not-exist.md` })
+check(notFound?.ok === false, `不存在路径返回结构化错误：${notFound?.error?.code ?? '(非错误)'}`)
 
-  const notFound = await run('kb_read', { path: `${proj}/does-not-exist.md` })
-  check(notFound?.ok === false, `不存在的笔记返回结构化错误：${notFound?.error?.code ?? '(非错误)'}`)
-
-  // 真值必须带上 suggestion 字段（agent 靠它自纠）；这里只要求"不出现 undefined 键"
-  check(
-    Object.keys(notFound?.error ?? {}).every((key) => notFound.error[key] !== undefined),
-    '错误对象里没有 undefined 值'
-  )
-}
-
-// ---- 4. 覆盖检查 -----------------------------------------------------------
 {
   const registered = [...tools.keys()].sort()
-  check(registered.length === 22, `工具数 22（实际 ${registered.length}）`)
+  check(JSON.stringify(registered) === JSON.stringify(['kb_doctor', 'kb_find', 'kb_gap', 'kb_read']), `工具表恰为四项：${registered.join(', ')}`)
   if (REAL) {
-    check(called.size >= 8, `真实 vault 模式覆盖了 ${called.size} 个只读工具：${[...called].sort().join(', ')}`)
+    check(called.size >= 5, `真实 vault 模式覆盖 ${called.size} 个调用`)
   } else {
-    const missed = registered.filter((name) => !called.has(name))
-    check(missed.length === 0, `${registered.length} 个工具全部过校验器（漏掉：${missed.join(', ') || '无'}）`)
+    check(called.size === registered.length, '每个注册工具都通过无损 JSON 校验')
   }
 }
-
 // 只在临时 vault 模式清理；**绝不**对真实 vault 做任何删除。
 if (!REAL) {
   rmSync(vault, { recursive: true, force: true })
-  rmSync(repoDir, { recursive: true, force: true })
-  console.log('\n临时 vault / 仓库已清理')
+  console.log('\n临时 vault 已清理')
 } else {
   console.log(`\n真实 vault 未被写入（只读模式）：${vault}`)
 }

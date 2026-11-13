@@ -38,7 +38,7 @@
 
 ### 3. `kb_doctor` 增加 `origin` 覆盖提示（本方案的适配）
 
-本方案要求新笔记显式标注来源分级 `origin`。该字段缺失时 `originOf()` 会兜底成 `local`，外部资料与推理内容会被当成"本地已验证知识"召回。为让漏填可被检出，`core/kb.js` 的 `doctor()` 增加一条**聚合** info 提示（不逐篇刷屏）：
+本方案要求新笔记显式标注来源分级 `origin`。该字段缺失时 `originOf()` 显示为 `unlabeled`，仍参与默认召回但不冒充显式 local。为让漏填可被检出，`core/kb.js` 的 `doctor()` 增加一条**聚合** info 提示（不逐篇刷屏）：
 
 | 位置 | 改动 |
 |---|---|
@@ -50,13 +50,17 @@
 
 > 该改动属于"因本方案需要额外适配"，合并上游时需保留。
 
-### 4. 工具表更正（本方案的更正）
+### 4. 当前工具面（本方案适配）
+
+当前 vendor 副本与运行版保持一致：模型工具为 `kb_find`、`kb_read`、`kb_doctor`、`kb_gap`。笔记正文的创建、追加、局部修订、移动、删除与撤销不由 dsh-kb 处理，统一使用 Obsidian MCP；`kb_gap` 仅维护带确定性 ID 的结构化缺口清单。客户端知识面板为只读，旧 Inbox/审批/重建索引和重复写入路由已移除。
+
+### 6. 历史工具表更正（本方案的更正）
 
 上游 README 的「工具面（P1–P5）」表与本副本的实际实现不符，已按 `lib/tools.js` 里 `register()` 的工具逐个核对后更正（+5 −3）：
 
 | 位置 | 改动 |
 |---|---|
-| P2 行 | 删掉**并不存在**的 `kb_merge`；合并改注为 `kb_inbox` 的 `action:'merge'`（就地修订是 `revise`） |
+| 历史 P2 行 | 旧版 Inbox/审批工具表仅作历史记录；当前 vendor 工具面为 `kb_find` / `kb_read` / `kb_doctor` / `kb_gap`，笔记正文由 Obsidian MCP 写入 |
 | P3 行 | 补全 `kb_wiki_*` 七件（原表缺 `kb_wiki_upsert` / `kb_wiki_list` / `kb_wiki_delete`） |
 | P4 行 | 补 `kb_feedback` |
 | 表后 | 新增一行核对说明：实测共 **22 个**工具、没有 `kb_merge` |

@@ -1,7 +1,7 @@
 {
   "name": "dsh-kb",
   "version": "0.1.0",
-  "description": "DSH 本地知识库：全 vault 原地索引 + 项目级 L1/L2 检索 + 任务后自动沉淀（obsidian-workbench × dsh-cardian 合并）",
+  "description": "DSH 知识发现插件：全 vault 原地索引、中文检索、来源分级与只读知识面板；笔记写入交由 Obsidian MCP。",
   "keywords": [
     "deepseek-harness",
     "dsh",
@@ -28,8 +28,8 @@
   ],
   "scripts": {
     "build:client": "node scripts/build-client.mjs",
-    "check": "node --check lib/index.js && node --check lib/tools.js && node --check lib/client-source.js && npm run build:client && node --check lib/client.js",
-    "test": "npm run check && node scripts/kb-smoke.mjs && node scripts/host-smoke.mjs && node scripts/p2-smoke.mjs && node scripts/p3-smoke.mjs && node scripts/p4-smoke.mjs && node scripts/p5-smoke.mjs && node scripts/tool-output-smoke.mjs && node scripts/cordis-load.mjs"
+    "check": "node --check lib/index.js && node --check lib/tools.js && node --check lib/capture-hook.js && node --check lib/commands.js && node --check lib/client-source.js && npm run build:client && node --check lib/client.js",
+    "test": "npm run check && node scripts/kb-smoke.mjs && node scripts/host-smoke.mjs && node scripts/tool-output-smoke.mjs && node scripts/hook-smoke.mjs && node scripts/command-smoke.mjs && node scripts/cordis-load.mjs"
   },
   "dsh": {
     "bundle": {

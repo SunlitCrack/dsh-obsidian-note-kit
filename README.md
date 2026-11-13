@@ -64,7 +64,7 @@
 
 ### 第 1 步 · 部署 dsh-kb（以 DSH 为宿主时）
 
-`dsh-kb` 提供 `kb_*` 工具族：L0 索引、分层检索、收件箱、库体检、索引重建。它是**唯一**提供"自动索引 + 检索"的依赖，本方案的查重与登记环节会用到。
+`dsh-kb` 提供知识发现工具：`kb_find`、`kb_read`、`kb_doctor` 与结构化 `kb_gap`。它负责中文检索、来源分级和只读体检；笔记正文的创建、修订、移动和撤销统一交由 Obsidian MCP。
 
 1. 把 `vendor/dsh-plugins/dsh-kb/` 拷到你放插件源码的位置，例如 `<你的插件目录>/dsh-kb/`
 2. 在 DSH profile 的 `package.json` 里把它加成依赖，并列入 bundle 列表：
@@ -86,9 +86,9 @@
 
 3. 让插件依赖就位（`dsh-kb` 的运行期依赖极少，若报缺包，在其目录里装一次即可）
 4. **重启 DSH**
-5. 验证：工具表里应出现 `kb_index` / `kb_search` / `kb_read` / `kb_doctor` / `kb_reindex` 等
+5. 验证：工具表应出现 `kb_find` / `kb_read` / `kb_doctor` / `kb_gap`；笔记写入应使用 Obsidian MCP 的 `create_note` / `patch_note` / `move_note` / `undo_write`
 
-> `lib/client.js` 是已构建好的 web 面板产物（含"知识中心 → 洞察 → 重建索引"按钮），**不需要重新构建**。只有改了 `lib/client-source.js` 才需要跑 `npm run build:client`。
+> `lib/client.js` 是已构建好的只读知识面板产物。只有改了 `lib/client-source.js` 才需要跑 `npm run build:client`。笔记内容修改走 Obsidian MCP，不经面板直写。
 
 **非 DSH 宿主**：跳过本步。用 rg / grep / 库自带检索替代查重环节，并在 `harness.md` 里把你的写入通道写清楚。
 
@@ -206,8 +206,8 @@ mkdir -p my-vault
 
 - **适配层完全缺失也能工作**：通用层自带降级描述——用空库沙盒实测过，纯靠通用层 + 库内自己的总表，六步流程全部走通。
 - **未覆盖**：故障复盘与报错信号卡的迁移路径没单独跑过演习；它们的落盘 / 登记逻辑与知识笔记同构。
-- **来源分级字段不写会被当成"本地已验证"**：按来源分级的索引工具对缺 `origin` 的笔记默认按 `local` 处理，外部资料与推理内容不显式标注就会混进默认检索结果。适配层已把该字段列为必填项。
-- **正式笔记直写优先于插件的沉淀契约**：宿主插件（如 `dsh-kb`）的提示词要求"先落 `Inbox/` 再 promote"，本方案仍直写目标目录；被拦截时走完该流程后立即归位，并补齐 `capture` 不带入的元数据（`summary` / `category` / `trigger_keywords`）。
+- **来源分级字段不写会显示为未标注**：dsh-kb 对缺 `origin` 的笔记显示为 `unlabeled`（仍参与默认召回，但不冒充 `local`）；`web` / `inferred` 默认不进 `kb_find` 结果。适配层已把该字段列为必填项。
+- **笔记正文写入统一走 Obsidian MCP**：`dsh-kb` 只做发现、读取、体检和结构化缺口，不再有 Inbox/审批写盘流程；正文改写先读 `contentHash` 再传 `prevHash`，误操作用 `undo_write`。
 - **走 MCP 的写入通道在"任一侧重载"后会失效**：这类通道是 sessionful 的（客户端持 session id，服务端按 session 记状态），服务端插件重载或宿主重启会清掉 session、而客户端还握着旧 id，下一次调用报 `Session not found`——换参数重试无用。处理与预防见 `references/harness.md` §2「共同限制」。
 - **配置类改动都是"写盘 → 重载 → 回读"三步**：只写盘不重载等于没改；反过来先重载再写盘会被宿主的下一次保存盖掉。同上，细节见 `references/harness.md` §2。
 - `k8s-obsidian-notes` 的名字带 k8s，但它同样管平台功能类笔记。改名会牵动多处交叉引用，故保留原名，靠 `description` 说明覆盖面。

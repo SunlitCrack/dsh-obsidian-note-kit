@@ -1,263 +1,107 @@
-// dsh-kb host-half smoke test — boots the plugin's apply() with a fake cordis
-// context, then drives the real HTTP routes and the model-callable tools
-// against the real vault. No dsh host, no browser, no auth involved.
-//
-//   node scripts/host-smoke.mjs [vaultPath]
+// dsh-kb host integration smoke: tools, prompt, hooks, and the read-only API.
+
 import { strict as assert } from 'node:assert'
+import { mkdtempSync, mkdirSync, writeFileSync, existsSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
 
-const vault = process.argv[2] || process.env.OBSIDIAN_VAULT_PATH
+const vault = mkdtempSync(path.join(tmpdir(), 'dsh-kb-host-'))
 process.env.OBSIDIAN_VAULT_PATH = vault
+const { apply } = await import('../lib/index.js')
+const project = path.join(vault, 'demo')
+mkdirSync(project, { recursive: true })
+const writeNote = (name, frontmatter, body) =>
+  writeFileSync(path.join(project, name), `---\n${frontmatter}\n---\n${body}\n`, 'utf8')
+writeNote('local.md', 'title: Local\ntags: [demo]\norigin: local\nsummary: Alpha retrieval fixture', '# AlphaSearchToken local knowledge')
+writeNote('unlabeled.md', 'title: Unlabeled\ntags: [demo]\nsummary: Alpha retrieval fixture', '# AlphaSearchToken hand-written knowledge')
+writeNote('web.md', 'title: Web\ntags: [demo]\norigin: web\nsummary: Alpha retrieval fixture', '# AlphaSearchToken external knowledge')
+writeNote('inferred.md', 'title: Inferred\ntags: [demo]\norigin: inferred\nsummary: Alpha retrieval fixture', '# AlphaSearchToken inferred knowledge')
 
-const mod = await import('../lib/index.js')
-const { apply } = mod
-
-// ---- strict-inject emulation ---------------------------------------------
-// This cordis build THROWS when a plugin reads ctx.<service> without declaring
-// it in `inject` (`cannot get property "X" without inject`), and that throw
-// happens inside apply() → the whole plugin tree fails to load. The fake ctx
-// below mirrors that strictly, so this harness catches the exact bug that broke
-// DSH startup on 2026-09-14 (kb tool registration touching ctx.tools without
-// `export const inject = ['tools']`).
-const declared = new Set(Array.isArray(mod.inject) ? mod.inject : [])
-assert.ok(
-  declared.has('tools'),
-  'lib/index.js 必须 `export const inject = ["tools"]`（严格 inject 契约）'
-)
-
+const fail = []
+const ok = (message) => console.log(`✓ ${message}`)
+const check = (condition, message) => (condition ? ok(message) : (fail.push(message), console.error(`✗ ${message}`)))
 const routes = new Map()
 const tools = new Map()
 const effects = []
-const promptSections = []
-
+const prompts = []
+const hooks = []
+const commandDefs = []
 const services = {
-  tools: {
-    register(def) {
-      tools.set(def.name, def)
-      return () => tools.delete(def.name)
-    },
-  },
-  webServer: {
-    register({ path: routePath, handler }) {
-      routes.set(routePath, handler)
-      return () => routes.delete(routePath)
-    },
-  },
-  // 插件会动态 inject approval（"改旧笔记需审批"的闸门）。这里给个"永远拒绝"的
-  // 桩：本冒烟只做只读检查，任何误触审批的动作都应被拒。
-  approval: {
-    async request() {
-      return 'denied'
-    },
-  },
-  // 插件会动态 inject systemPrompt（「先查库 + 任务后自动沉淀」的提示词契约）。
-  // 桩只记录注册进来的 section，供断言使用。
-  systemPrompt: {
-    section(entry) {
-      promptSections.push(entry)
-      return () => {}
-    },
-  },
+  tools: { register: (definition) => { tools.set(definition.name, definition); return () => tools.delete(definition.name) } },
+  webServer: { register: ({ path: route, handler }) => { routes.set(route, handler); return () => routes.delete(route) } },
+  systemPrompt: { section: (section) => { prompts.push(section); return () => {} } },
+  commands: { register: (definition) => { commandDefs.push(definition); return () => {} } },
 }
-
-const ctx = makeCtx(declared)
-
-/**
- * Fake cordis context. `allowed` is the set of service names this context lets
- * the plugin read — mirroring `inject`. `ctx.inject(deps, cb)` hands the
- * callback a CHILD context where those extra services became readable (that is
- * how the real host behaves: the plugin's own apply() body may only touch
- * statically declared services).
- */
-function makeCtx(allowed) {
-  return new Proxy(
-    {},
-    {
-      get(_target, prop) {
-        if (prop === 'inject') {
-          return (deps, fn) => {
-            for (const dep of deps) assert.ok(services[dep], `inject 了未知服务: ${dep}`)
-            return fn(makeCtx(new Set([...allowed, ...deps])))
-          }
-        }
-        if (prop === 'effect') {
-          return (fn, label) => {
-            effects.push(label)
-            return fn()
-          }
-        }
-        if (typeof prop === 'string' && Object.hasOwn(services, prop)) {
-          if (!allowed.has(prop)) throw new Error(`cannot get property "${prop}" without inject`)
-          return services[prop]
-        }
-        throw new Error(`cannot get property "${String(prop)}" without inject`)
-      },
-      has() {
-        return true
-      },
+const declared = new Set(['tools'])
+const makeCtx = (allowed) => new Proxy({}, {
+  get(_target, property) {
+    if (property === 'inject') return (deps, callback) => callback(makeCtx(new Set([...allowed, ...deps])))
+    if (property === 'effect') return (_setup, label) => { effects.push(label) }
+    if (property === 'on') return (name, callback) => { hooks.push(name); return () => {} }
+    if (property === 'logger') return { warn: () => {} }
+    if (typeof property === 'string' && Object.hasOwn(services, property)) {
+      if (!allowed.has(property)) throw new Error(`service ${property} was not injected`)
+      return services[property]
     }
-  )
-}
-
-// apply() must not throw: a throw here is what takes DSH's startup down.
-apply(ctx)
-
-const fail = []
-const ok = (msg) => console.log(`✓ ${msg}`)
-const check = (cond, msg) => (cond ? ok(msg) : (fail.push(msg), console.error(`✗ ${msg}`)))
-
-// ---- wiring ---------------------------------------------------------------
-console.log(`vault: ${vault}\nroutes: ${[...routes.keys()].join('\n        ')}\n`)
-for (const want of [
-  '/api/dsh-kb/knowledge/index',
-  '/api/dsh-kb/knowledge/search',
-  '/api/dsh-kb/knowledge/read',
-]) {
-  check(routes.has(want), `路由已注册 ${want}`)
-}
-check(routes.size >= 16, `原有路由未被破坏（共 ${routes.size} 条）`)
-for (const want of ['kb_index', 'kb_search', 'kb_read']) {
-  check(tools.has(want), `工具已注册 ${want}`)
-}
-check(effects.includes('dsh-kb: route lifecycle'), '路由生命周期 effect 已登记')
-
-// ---- 系统提示词契约（「自动沉淀」的触发点）---------------------------------
-{
-  const section = promptSections.find((s) => s.name === 'dsh-kb:knowledge-base')
-  check(Boolean(section), '系统提示词 section 已注册')
-  check(section?.order === 480, `section order=${section?.order}（在 persona 与 PLAN_POLICY 之间）`)
-  const text = String(section?.text ?? '')
-  for (const [needle, label] of [
-    ['kb_index', '先查库（kb_index）'],
-    ['kb_search', '检索（kb_search）'],
-    ['kb_read', '按需读正文（kb_read）'],
-    ['origin: local', 'origin 分级（只信 local）'],
-    ['kb_capture', '任务后自动沉淀（kb_capture）'],
-    ['Inbox', '新知识落 Inbox'],
-    ['kb_gap', '记缺口（kb_gap）'],
-    ['需要用户批准', '改旧笔记需批准'],
-    ['kb_reindex', '索引自愈（kb_reindex）'],
-  ]) {
-    check(text.includes(needle), `提示词覆盖：${label}`)
-  }
-  check(promptSections.length === 1, `只注册 1 个 section（${promptSections.length}）`)
-}
-
-// ---- route driver ---------------------------------------------------------
-function call(routePath, query = {}) {
-  const handler = routes.get(routePath)
-  if (!handler) throw new Error(`路由不存在: ${routePath}`)
-  const url = `${routePath}?${new URLSearchParams(query)}`
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`路由超时: ${url}`)), 60000)
-    const res = {
-      status: 0,
-      writeHead(status) {
-        this.status = status
-      },
-      end(body) {
-        clearTimeout(timer)
-        try {
-          resolve({ status: this.status, body: body ? JSON.parse(body) : null })
-        } catch (err) {
-          reject(new Error(`响应不是 JSON: ${String(body).slice(0, 200)}`))
-        }
-      },
-    }
-    handler({ method: 'GET', url }, res)
-  })
-}
-
-// ---- L0 -------------------------------------------------------------------
-const l0 = await call('/api/dsh-kb/knowledge/index')
-check(l0.status === 200 && l0.body.vault.noteCount > 50, `L0 项目清单：${l0.body.vault.projectCount} 个项目 / ${l0.body.vault.noteCount} 篇`)
-check(
-  Array.isArray(l0.body.projects) && l0.body.projects.every((p) => p.name && p.index),
-  'L0 返回每个项目的 INDEX.md 路径'
-)
-console.log(`  项目: ${l0.body.projects.map((p) => `${p.name}(${p.notes})`).join('  ')}`)
-console.log(`  usage.rule: ${l0.body.usage.rule.slice(0, 70)}…`)
-
-const k8s = await call('/api/dsh-kb/knowledge/index', { project: 'k8s' })
-check(typeof k8s.body.index === 'string' && k8s.body.index.startsWith('# k8s · 知识索引'), 'L0 单项目：返回 INDEX.md 正文')
-check(Array.isArray(k8s.body.entries?.rows) && k8s.body.entries.rows.length > 0, `L0 单项目：附带 L1 行（${k8s.body.entries?.rows?.length}）`)
-
-// ---- L1 -------------------------------------------------------------------
-const s1 = await call('/api/dsh-kb/knowledge/search', { q: 'flood-stage 磁盘只读', topK: 3 })
-check(s1.body.count > 0, `L1 检索命中 ${s1.body.count} 条`)
-check(
-  s1.body.results.every((r) => r.path && r.origin && 'snippet' in r && typeof r.score === 'number'),
-  'L1 结果含 path/origin/snippet/score'
-)
-check(s1.body.origins.join() === 'local', `默认只召回 local（origins=${s1.body.origins.join()})`)
-console.log(`  top: ${s1.body.results[0]?.score} ${s1.body.results[0]?.path}`)
-
-const s2 = await call('/api/dsh-kb/knowledge/search', { q: 'flood-stage', origin: 'web' })
-check(s2.body.count === 0, '显式 origin=web 也拿不到未标注的笔记（防污染闸门）')
-
-const s3 = await call('/api/dsh-kb/knowledge/search', { q: 'flood-stage', project: '启智平台管理' })
-check(s3.body.count === 0, '项目过滤生效（启智平台管理 里没有 flood-stage）')
-
-// type 分流：note = 只要没有 type 的普通笔记；wiki = 只 wiki 页
-const s4 = await call('/api/dsh-kb/knowledge/search', { q: 'flood-stage', type: 'note' })
-check(
-  s4.body.results.every((r) => !r.type),
-  `type=note 只召回普通笔记（${s4.body.count} 条，filter=${s4.body.typeFilter}）`
-)
-const s5 = await call('/api/dsh-kb/knowledge/search', { q: 'flood-stage', type: 'wiki' })
-check(s5.body.results.every((r) => r.type === 'wiki'), `type=wiki 只召回 wiki 页（${s5.body.count} 条）`)
-
-// ---- L2 -------------------------------------------------------------------
-const r1 = await call('/api/dsh-kb/knowledge/read', { path: 'k8s/INDEX.md', maxChars: 200 })
-check(r1.body.truncated === true && r1.body.body.length < 400, 'L2 读取 + maxChars 截断生效')
-check(r1.body.frontmatter?.type === 'index', 'L2 返回 frontmatter')
-
-const bad = await call('/api/dsh-kb/knowledge/read', { path: '../../../windows/win.ini' })
-check(!bad.body?.body && Boolean(bad.body?.error), `路径越界被拒绝（${bad.body?.error?.slice(0, 40)}）`)
-
-const hidden = await call('/api/dsh-kb/knowledge/read', { path: '.obsidian/app.json' })
-check(Boolean(hidden.body?.error), '隐藏目录被拒绝')
-
-// ---- tools ----------------------------------------------------------------
-const searchTool = tools.get('kb_search')
-const toolOut = await searchTool.execute({ query: 'mcpbridge host 头 403', topK: 2 })
-check(toolOut && toolOut.count >= 1, `工具 kb_search 直接执行命中 ${toolOut?.count}`)
-check(searchTool.readOnly === true && searchTool.behavior === 'read', 'kb_search 标注 readOnly/behavior')
-console.log(`  ${toolOut.results?.[0]?.path}`)
-
-const typedTool = await searchTool.execute({ query: 'flood-stage', type: 'note' })
-check(
-  Array.isArray(typedTool.results) && typedTool.results.every((r) => !r.type) && Boolean(typedTool.typeFilter),
-  `工具 kb_search 支持 type 分流（typeFilter=${typedTool.typeFilter}）`
-)
-
-const indexTool = tools.get('kb_index')
-const indexOut = await indexTool.execute({ project: '启智平台管理' })
-check(indexOut?.index?.startsWith('# 启智平台管理 · 知识索引'), '工具 kb_index 能按项目出 L0')
-
-const missing = await tools.get('kb_search').execute({})
-check(missing?.ok === false && missing?.error?.code, `缺参返回结构化错误（${missing?.error?.code}）`)
-
-const readTool = tools.get('kb_read')
-const readOut = await readTool.execute({
-  path: '启智平台管理/平台功能/鉴权/inspire-auth鉴权链路与servingId解密.md',
-  maxChars: 120,
+    throw new Error(`unexpected context access: ${String(property)}`)
+  },
 })
-check(readOut?.path?.startsWith('启智平台管理/'), '工具 kb_read 原地读取中文路径笔记')
 
-// ---- 反向对照：没有 inject 声明时 apply() 必须炸 ---------------------------
-// 2026-09-14 的启动崩溃就是这条路径（访问 ctx.tools 而没声明 inject）。这里
-// 用一个"什么都不允许"的 ctx 复现它，证明本测试确实能抓住该根因。
-// ---- 反向对照：没有静态 inject 声明时 apply() 必须炸 -----------------------
-// 2026-09-14 的启动崩溃正是这条路径：访问 ctx.tools 而插件没声明
-// `export const inject = ['tools']`。这里用 allowed=∅ 的 ctx 精确复现它
-// （webServer 那段仍走动态 inject 成功，只有 tools 会炸），证明本测试能抓住根因。
-let threwWithoutInject = false
 try {
-  apply(makeCtx(new Set()))
-} catch {
-  threwWithoutInject = true
+  apply(makeCtx(declared))
+  const expectedTools = ['kb_doctor', 'kb_find', 'kb_gap', 'kb_read']
+  check(JSON.stringify([...tools.keys()].sort()) === JSON.stringify(expectedTools), `工具表精简为 ${expectedTools.join(', ')}`)
+  for (const removed of ['kb_index', 'kb_search', 'kb_capture', 'kb_inbox', 'kb_import', 'kb_export', 'kb_feedback', 'kb_graph', 'kb_tagcloud', 'kb_skill_export', 'kb_reindex']) {
+    check(!tools.has(removed), `${removed} 不再暴露为模型工具`)
+  }
+
+  for (const route of ['/api/dsh-kb/knowledge/index', '/api/dsh-kb/knowledge/search', '/api/dsh-kb/knowledge/read', '/api/dsh-kb/knowledge/gaps']) {
+    check(routes.has(route), `只读/缺口路由已注册：${route}`)
+  }
+  for (const route of ['/api/dsh-kb/save', '/api/dsh-kb/create-note', '/api/dsh-kb/create-folder', '/api/dsh-kb/rename', '/api/dsh-kb/move', '/api/dsh-kb/delete', '/api/dsh-kb/undo-delete', '/api/dsh-kb/knowledge/inbox', '/api/dsh-kb/knowledge/reindex']) {
+    check(!routes.has(route), `重复笔记写入路由已移除：${route}`)
+  }
+
+  const find = tools.get('kb_find')
+  check(find.readOnly === true && find.behavior === 'read', 'kb_find 标记为只读')
+  const defaults = await find.execute({ query: 'AlphaSearchToken', project: 'demo' })
+  check(defaults.origins.includes('local') && defaults.origins.includes('unlabeled'), '默认召回 local + unlabeled')
+  check(!defaults.origins.includes('web') && !defaults.origins.includes('inferred'), '默认过滤 web/inferred')
+  check(defaults.results.some((row) => row.path === 'demo/local.md'), '检索命中本地笔记')
+  check(defaults.results.some((row) => row.path === 'demo/unlabeled.md'), '检索命中未标注笔记')
+  check(!defaults.results.some((row) => /web|inferred/.test(row.path)), '默认结果不包含 web/inferred 笔记')
+
+  const expanded = await find.execute({ query: 'AlphaSearchToken', project: 'demo', includeWeb: true })
+  check(expanded.results.some((row) => row.path === 'demo/web.md'), '显式 includeWeb 才包含外部来源')
+  const l0 = await find.execute({ project: 'demo' })
+  check(l0.index?.startsWith('# demo · 知识索引'), '项目清单按需返回内存 L0')
+  check(!existsSync(path.join(project, 'INDEX.md')), 'L0 查询不生成磁盘 INDEX.md')
+
+  const read = await tools.get('kb_read').execute({ path: 'demo/unlabeled.md' })
+  check(read.origin === 'unlabeled' && read.body.includes('hand-written'), 'kb_read 返回准确的来源与正文')
+  const doctor = await tools.get('kb_doctor').execute({ project: 'demo' })
+  check(!doctor.problems.some((problem) => /INDEX\.md/.test(problem.issue)), 'doctor 不再检查磁盘派生索引')
+
+  const gapTool = tools.get('kb_gap')
+  const gap = await gapTool.execute({ action: 'add', project: 'demo', question: 'AlphaSearchToken gap fixture' })
+  const duplicate = await gapTool.execute({ action: 'add', project: 'demo', question: 'AlphaSearchToken gap fixture' })
+  check(Boolean(gap.id) && duplicate.duplicate === true && duplicate.id === gap.id, 'kb_gap 对重复问题幂等')
+  const resolved = await gapTool.execute({ action: 'resolve', project: 'demo', id: gap.id, note: 'covered by fixture' })
+  check(resolved.done === 1 && resolved.open === 0, 'kb_gap 可按 ID resolve')
+
+  const prompt = String(prompts.find((item) => item.name === 'dsh-kb:knowledge-base')?.text ?? '')
+  check(prompt.includes('kb_find') && prompt.includes('unlabeled'), '提示词使用统一发现工具和来源状态')
+  check(prompt.includes('Obsidian MCP') && prompt.includes('prevHash'), '提示词指定唯一笔记 writer 与 CAS 写入')
+  check(prompt.includes('kb_gap') && !prompt.includes('kb_capture') && !prompt.includes('kb_inbox'), '提示词只保留结构化缺口特例')
+  check(!hooks.includes('session/event') && hooks.includes('tools/post-execute'), '仅保留技能上下文 hook')
+  check(commandDefs.some((definition) => definition.name === 'kb'), '/kb 命令已注册')
+  check(effects.includes('dsh-kb: route lifecycle'), '只读路由 lifecycle 已挂载')
+} catch (error) {
+  fail.push(error.stack || error.message)
+  console.error(error.stack || error)
+} finally {
+  rmSync(vault, { recursive: true, force: true })
 }
-check(threwWithoutInject, '对照组：未声明 inject 时 apply() 必须抛错（证明测试能抓住启动崩溃根因）')
 
 console.log(fail.length ? `\n结果：${fail.length} 项失败` : '\n结果：全部通过')
 if (fail.length) process.exitCode = 1
