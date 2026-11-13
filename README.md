@@ -33,6 +33,7 @@
 | `skills/writing-postmortems/` | 故障文档**怎么写**：完整复盘骨架 + 报错信号卡骨架 / 规则 / 维护约定 |
 | `templates/归类总表模板.md` | 笔记库根的规则表模板——各 skill 的判定依据 |
 | `templates/适配层示例-*.md` | 适配层**填好之后**长什么样的脱敏示例（`local-adaptation` / `harness` 各一份） |
+| `scripts/probe-mcp-tools.mjs` | 列出本机 MCP server 实际暴露的工具名与说明，用来填 `harness.md` 的能力表 |
 
 `skills/*/references/` 下的两个文件**本身就是模板**（含占位符与逐项填写指引）；`templates/适配层示例-*.md` 是它们**填好之后**的样子，用来对照颗粒度——**只读不拷**，别把示例当模板复制进 `references/`。
 
@@ -92,7 +93,13 @@
 
 3. 让插件依赖就位（`dsh-kb` 的运行期依赖极少，若报缺包，在其目录里装一次即可）
 4. **重启 DSH**
-5. 验证：工具表应出现 `kb_find` / `kb_read` / `kb_doctor` / `kb_gap`；笔记写入应使用 Obsidian MCP 的 `create_note` / `patch_note` / `move_note` / `undo_write`
+5. 验证：工具表应出现 `kb_find` / `kb_read` / `kb_doctor` / `kb_gap`。**笔记写入的 MCP 工具名必须按本机实测确认**，不同 MCP 实现名字不同：
+
+   ```bash
+   node scripts/probe-mcp-tools.mjs
+   ```
+
+   把它的输出填进 `skills/*/references/harness.md` §1.2。§1.1 列出了必须覆盖的四个能力（新建 / 局部改 / 移动改名 / 并发保护），照着槽位挑工具，不要照抄别人的清单。
 
 > `lib/client.js` 是已构建好的只读知识面板产物。只有改了 `lib/client-source.js` 才需要跑 `npm run build:client`。笔记内容修改走 Obsidian MCP，不经面板直写。
 
@@ -137,7 +144,7 @@ mkdir -p my-vault
 |---|---|
 | 库与落点 | 库路径、本体的落点惯例、命名规则、参考实例 |
 | frontmatter 取值 | 你库实际用的键与取值来源 |
-| 索引与登记 | 哪些是自动索引（只读）、哪些要手写、登记行格式 |
+| 索引与登记 | 哪些是历史派生索引（不手改、不刷新）、哪些要手写、登记行格式 |
 | 目录配套动作 | **可选**——如果用 Obsidian + Iconize 就是配图标；不用就整节删掉 |
 | 素材源 | **可选**——只读知识库路径；没有就不填 |
 | 环境专属信息 | 脱敏清单、哪些内部标识要保留原文 |
@@ -213,7 +220,7 @@ mkdir -p my-vault
 - **适配层完全缺失也能工作**：通用层自带降级描述——用空库沙盒实测过，纯靠通用层 + 库内自己的总表，六步流程全部走通。
 - **未覆盖**：故障复盘与报错信号卡的迁移路径没单独跑过演习；它们的落盘 / 登记逻辑与知识笔记同构。
 - **来源分级字段不写会显示为未标注**：dsh-kb 对缺 `origin` 的笔记显示为 `unlabeled`（仍参与默认召回，但不冒充 `local`）；`web` / `inferred` 默认不进 `kb_find` 结果。适配层已把该字段列为必填项。
-- **笔记正文写入统一走 Obsidian MCP**：`dsh-kb` 只做发现、读取、体检和结构化缺口，不再有 Inbox/审批写盘流程；正文改写先读 `contentHash` 再传 `prevHash`，误操作用 `undo_write`。
+- **笔记正文写入统一走 Obsidian MCP**：`dsh-kb` 只做发现、读取、体检和结构化缺口，不再有 Inbox/审批写盘流程。MCP 侧的工具名**因实现而异**（seekstone 用 `create_note`/`patch_note` 并传 `prevHash`；Obsidian Local REST API 用 `vault_write`/`vault_patch` 并以 `ifMatch` 保护并发），以本机 `scripts/probe-mcp-tools.mjs` 实测为准。
 - **走 MCP 的写入通道在"任一侧重载"后会失效**：这类通道是 sessionful 的（客户端持 session id，服务端按 session 记状态），服务端插件重载或宿主重启会清掉 session、而客户端还握着旧 id，下一次调用报 `Session not found`——换参数重试无用。处理与预防见 `references/harness.md` §2「共同限制」。
 - **配置类改动都是"写盘 → 重载 → 回读"三步**：只写盘不重载等于没改；反过来先重载再写盘会被宿主的下一次保存盖掉。同上，细节见 `references/harness.md` §2。
 - `k8s-obsidian-notes` 的名字带 k8s，但它同样管平台功能类笔记。改名会牵动多处交叉引用，故保留原名，靠 `description` 说明覆盖面。
